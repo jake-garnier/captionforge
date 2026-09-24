@@ -1,0 +1,83 @@
+# Web Framework
+fastapi==0.109.0
+uvicorn[standard]==0.27.0
+pydantic>=2.7.0
+pydantic-settings>=2.1.0
+
+# Web Scraping (Playwright - no API needed!)
+playwright==1.41.0
+
+# Video Downloading
+yt-dlp==2025.11.12
+
+# Task Queue
+celery[redis]==5.3.6
+redis==5.0.1
+flower==2.0.1
+
+# Database
+psycopg2-binary==2.9.9
+sqlalchemy==2.0.25
+alembic==1.13.1
+
+# Utilities
+python-dotenv==1.0.0
+requests==2.31.0
+Pillow==10.2.0
+
+# OCR for caption extraction (GPU-accelerated with CUDA)
+torch>=2.1.0  # PyTorch with multi-GPU support for OlmOCR
+paddlepaddle-gpu==2.6.2  # PaddlePaddle with CUDA 12.x support (fallback OCR)
+paddleocr==2.9.1  # PaddleOCR for fast fallback extraction
+opencv-python==4.10.0.84  # OpenCV for video processing
+
+# Vision-Language Models for intelligent caption generation
+transformers>=4.45.0  # Hugging Face transformers (updated for Qwen2-VL / OlmOCR-2 support)
+accelerate>=0.34.0  # Efficient model loading and multi-GPU inference
+qwen-vl-utils>=0.0.8  # Qwen2-VL utilities for image processing (required for OlmOCR)
+
+# LLM for caption post-processing (self-hosted on RTX 2080 Ti)
+sentencepiece==0.2.0  # Tokenizer for Mistral models
+bitsandbytes==0.43.1  # 8-bit/4-bit quantization for efficient LLM inference
+scipy==1.13.0  # Required for transformers model loading
+
+# LoRA fine-tuning for training custom caption models
+peft==0.11.1  # Parameter-efficient fine-tuning (LoRA adapters) - updated for bitsandbytes compatibility
+datasets==2.18.0  # Hugging Face datasets for training data loading
+trl==0.9.6  # Transformer Reinforcement Learning - provides SFTTrainer for supervised fine-tuning
+rich>=13.0.0  # Required by trl for progress display
+
+# Word segmentation for fixing concatenated OCR text
+wordsegment==1.3.1
+
+# NEW: Enhanced caption extraction improvements
+# Frame deduplication and image preprocessing
+imagehash==4.3.1  # Perceptual hashing for frame deduplication
+Pillow>=10.2.0  # Image processing (already included above)
+
+# Multi-OCR ensemble
+easyocr==1.7.0  # Alternative OCR engine for ensemble
+pytesseract==0.3.10  # Tesseract OCR wrapper
+
+# Text quality filtering
+pyenchant==3.2.2  # Dictionary-based spell checking
+nltk==3.8.1  # Natural language toolkit for word lists
+
+# Semantic deduplication
+sentence-transformers>=2.7.0  # Sentence embeddings for duplicate detection (updated for huggingface-hub compatibility)
+scikit-learn>=1.3.2  # Cosine similarity calculations (required by albumentations)
+
+# Logging and monitoring
+python-json-logger==2.0.7
+
+# Video generation - caption overlay on background videos
+moviepy==1.0.3  # Video editing and composition
+
+# Publishing - Reddit integration
+praw>=7.7.1  # Python Reddit API Wrapper for posting and crossposting
+
+# Telegram scraping - access private channels via user account
+telethon>=1.36.0  # Telegram client library for user account access
+
+# Cloud GPU training - Vast.ai integration
+# Note: vastai CLI is installed separately via pip at runtime to avoid dependency conflicts

@@ -1,0 +1,573 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Database with pgvector support
+  postgres:
+    image: pgvector/pgvector:pg15
+    container_name: captions-postgres
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-captions}
+      POSTGRES_USER: ${POSTGRES_USER:-captionsuser}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    networks:
+      - captions-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-captionsuser}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Redis (Message Broker & Result Backend)
+  redis:
+    image: redis:7-alpine
+    container_name: captions-redis
+    command: redis-server --appendonly yes ${REDIS_PASSWORD:+--requirepass $REDIS_PASSWORD}
+    volumes:
+      - redis_data:/data
+    ports:
+      - "6379:6379"
+    networks:
+      - captions-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # FastAPI Application
+  api:
+    build: .
+    container_name: captions-api
+    command: uvicorn api.main:app --host 0.0.0.0 --port 8000
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8000/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    environment:
+      # Application
+      APP_NAME: "Captions Service"
+      ENVIRONMENT: ${ENVIRONMENT:-production}
+      DEBUG: ${DEBUG:-false}
+
+      # Playwright (no API needed!)
+      PLAYWRIGHT_HEADLESS: ${PLAYWRIGHT_HEADLESS:-true}
+      PLAYWRIGHT_TIMEOUT: ${PLAYWRIGHT_TIMEOUT:-30000}
+
+      # Database
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_DB: ${POSTGRES_DB:-captions}
+      POSTGRES_USER: ${POSTGRES_USER:-captionsuser}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+
+      # Redis & Celery
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-}
+      CELERY_BROKER_URL: "redis://${REDIS_PASSWORD:+:$REDIS_PASSWORD@}redis:6379/0"
+      CELERY_RESULT_BACKEND: "redis://${REDIS_PASSWORD:+:$REDIS_PASSWORD@}redis:6379/1"
+
+      # Storage
+      VIDEO_STORAGE_PATH: /data/videos
+
+      # Scraping
+      SCRAPING_ENABLED: ${SCRAPING_ENABLED:-true}
+      SCRAPING_INTERVAL_HOURS: ${SCRAPING_INTERVAL_HOURS:-6}
+      MAX_POSTS_PER_SCRAPE: ${MAX_POSTS_PER_SCRAPE:-100}
+      DOWNLOAD_MAX_FILE_SIZE_MB: ${DOWNLOAD_MAX_FILE_SIZE_MB:-100}
+      DOWNLOAD_MAX_DURATION_SECONDS: ${DOWNLOAD_MAX_DURATION_SECONDS:-600}
+
+      # Postpone (Scheduled Reddit Posting)
+      POSTPONE_API_KEY: ${POSTPONE_API_KEY:-}
+
+      # Media host (composed videos are served from this API by default)
+      MEDIA_BASE_URL: ${MEDIA_BASE_URL:-}
+      MEDIA_HOST_TYPE: ${MEDIA_HOST_TYPE:-self}
+
+      # Public noVNC URL shown in the UI for interactive browser logins
+      NOVNC_PUBLIC_URL: ${NOVNC_PUBLIC_URL:-http://localhost:6080/vnc.html?autoconnect=true}
+
+      # Host-machine access (llama-server control over SSH)
+      LLM_HOST_IP: ${LLM_HOST_IP:-host.docker.internal}
+      LLM_HOST_SSH_USER: ${LLM_HOST_SSH_USER:-ubuntu}
+      LLM_HOST_SSH_PASSWORD: ${LLM_HOST_SSH_PASSWORD:-}
+      LLM_HOST_SSH_KEY_PATH: ${LLM_HOST_SSH_KEY_PATH:-}
+
+      # Vast.ai (Cloud Training)
+      VASTAI_API_KEY: ${VASTAI_API_KEY:-}
+
+      # Patreon→Telegram membership sync (per-niche creator OAuth client)
+      PATREON_MOTIVATION_CLIENT_ID: ${PATREON_MOTIVATION_CLIENT_ID:-}
+      PATREON_MOTIVATION_CLIENT_SECRET: ${PATREON_MOTIVATION_CLIENT_SECRET:-}
+      PATREON_MOTIVATION_ACCESS_TOKEN: ${PATREON_MOTIVATION_ACCESS_TOKEN:-}
+      PATREON_MOTIVATION_REFRESH_TOKEN: ${PATREON_MOTIVATION_REFRESH_TOKEN:-}
+      PATREON_MOTIVATION_CAMPAIGN_ID: ${PATREON_MOTIVATION_CAMPAIGN_ID:-}
+      PATREON_MOTIVATION_POST_ID: ${PATREON_MOTIVATION_POST_ID:-}
+
+    volumes:
+      - ./:/app
+      - video_data:/data/videos
+      - background_videos:/data/background_videos
+      - composed_videos:/data/composed_videos  # Output for composed caption videos
+      - training_models:/data/training_models  # Read-only access to trained models for validation
+      - patreon_cookies:/data/patreon_cookies  # Session cookies for Patreon publishing
+      - patreon_tokens:/data/patreon_tokens  # Patreon OAuth refresh tokens (rotated)
+      - lora_adapters:/data/lora_adapters  # LoRA adapter files for generation
+      - vastai_ssh:/root/.ssh  # Persist SSH keys for Vast.ai across container rebuilds
+      - ./config:/app/config
+    ports:
+      - "8000:8000"
+      - "6080:6080"  # noVNC for interactive Patreon browser session
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - captions-network
+    restart: unless-stopped
+
+  # Celery Worker - GPU 0 (OCR Processing + LLM Batch) - RTX 2080 Ti (11GB)
+  # This worker does OCR extraction (like GPU 1) plus handles LLM batch refinement
+  # OCR is done WITHOUT inline LLM - all LLM refinement via batch task on gpu_llm queue
+  # Listens to gpu queue (shared extraction) AND gpu_llm queue (LLM batch tasks)
+  celery-worker:
+    build: .
+    container_name: captions-celery-worker
+    command: celery -A tasks.celery_app worker --loglevel=info --concurrency=1 --pool=solo -Q gpu,gpu_llm,gpu_status_0,gpu_training_0 -n gpu-worker-0@%h
+    healthcheck:
+      test: ["CMD-SHELL", "celery -A tasks.celery_app inspect ping -d celery@$HOSTNAME || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    extra_hosts:
+      - "host.docker.internal:host-gateway"  # Allow access to llama-server on host
+    runtime: nvidia
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              device_ids: ['0']
+              capabilities: [gpu]
+    environment:
+      NVIDIA_VISIBLE_DEVICES: "0"
+      CUDA_VISIBLE_DEVICES: "0"
+      NVIDIA_DRIVER_CAPABILITIES: compute,utility
+      LD_LIBRARY_PATH: /usr/lib/x86_64-linux-gnu:/usr/local/nvidia/lib:/usr/local/nvidia/lib64
+      # CUDA fork support
+      CUDA_LAUNCH_BLOCKING: "1"
+      # RTX 4000 series P2P fix (required for RTX 4060 Ti)
+      NCCL_P2P_DISABLE: "1"
+      NCCL_IB_DISABLE: "1"
+      # DISABLE inline LLM during OCR - all LLM refinement via batch task
+      LLM_POSTPROCESS_ENABLED: "false"
+      # Playwright (no API needed!)
+      PLAYWRIGHT_HEADLESS: ${PLAYWRIGHT_HEADLESS:-true}
+      PLAYWRIGHT_TIMEOUT: ${PLAYWRIGHT_TIMEOUT:-30000}
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_DB: ${POSTGRES_DB:-captions}
+      POSTGRES_USER: ${POSTGRES_USER:-captionsuser}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-}
+      CELERY_BROKER_URL: "redis://${REDIS_PASSWORD:+:$REDIS_PASSWORD@}redis:6379/0"
+      CELERY_RESULT_BACKEND: "redis://${REDIS_PASSWORD:+:$REDIS_PASSWORD@}redis:6379/1"
+      VIDEO_STORAGE_PATH: /data/videos
+      SCRAPING_ENABLED: ${SCRAPING_ENABLED:-true}
+      MAX_POSTS_PER_SCRAPE: ${MAX_POSTS_PER_SCRAPE:-100}
+      DOWNLOAD_MAX_FILE_SIZE_MB: ${DOWNLOAD_MAX_FILE_SIZE_MB:-100}
+      DOWNLOAD_MAX_DURATION_SECONDS: ${DOWNLOAD_MAX_DURATION_SECONDS:-600}
+      # Vast.ai (Cloud Training)
+      VASTAI_API_KEY: ${VASTAI_API_KEY:-}
+      # Host-machine access (llama-server control over SSH)
+      LLM_HOST_IP: ${LLM_HOST_IP:-host.docker.internal}
+      LLM_HOST_SSH_USER: ${LLM_HOST_SSH_USER:-ubuntu}
+      LLM_HOST_SSH_PASSWORD: ${LLM_HOST_SSH_PASSWORD:-}
+      LLM_HOST_SSH_KEY_PATH: ${LLM_HOST_SSH_KEY_PATH:-}
+    volumes:
+      - ./:/app
+      - video_data:/data/videos
+      - ./config:/app/config
+      - training_models:/data/training_models  # Persist trained LoRA models (outside /app to avoid bind mount conflict)
+      - background_videos:/data/background_videos  # Shared with the scraper worker for watermark filtering
+      - composed_videos:/data/composed_videos  # Output for composed caption videos
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - captions-network
+    restart: unless-stopped
+
+  # Celery Worker - GPU 1 (OCR Processing ONLY) - RTX 4060 Ti (8GB)
+  # This worker only runs OCR (Qwen2-VL-2B ~5GB), LLM disabled to fit in 8GB VRAM
+  # LLM refinement happens later via batch task on GPU 0
+  celery-worker-gpu-2:
+    build: .
+    container_name: captions-celery-worker-gpu-2
+    command: celery -A tasks.celery_app worker --loglevel=info --concurrency=1 --pool=solo -Q gpu,gpu_status_1,gpu_training_1 -n gpu-worker-1@%h
+    healthcheck:
+      test: ["CMD-SHELL", "celery -A tasks.celery_app inspect ping -d celery@$HOSTNAME || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    extra_hosts:
+      - "host.docker.internal:host-gateway"  # Allow access to llama-server on host
+    runtime: nvidia
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              device_ids: ['1']
+              capabilities: [gpu]
+    environment:
+      NVIDIA_VISIBLE_DEVICES: "1"
+      CUDA_VISIBLE_DEVICES: "0"
+      NVIDIA_DRIVER_CAPABILITIES: compute,utility
+      LD_LIBRARY_PATH: /usr/lib/x86_64-linux-gnu:/usr/local/nvidia/lib:/usr/local/nvidia/lib64
+      # CUDA fork support
+      CUDA_LAUNCH_BLOCKING: "1"
+      # DISABLE LLM on this worker - only 8GB VRAM, can only fit OCR model
+      LLM_POSTPROCESS_ENABLED: "false"
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_DB: ${POSTGRES_DB:-captions}
+      POSTGRES_USER: ${POSTGRES_USER:-captionsuser}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-}
+      CELERY_BROKER_URL: "redis://${REDIS_PASSWORD:+:$REDIS_PASSWORD@}redis:6379/0"
+      CELERY_RESULT_BACKEND: "redis://${REDIS_PASSWORD:+:$REDIS_PASSWORD@}redis:6379/1"
+      VIDEO_STORAGE_PATH: /data/videos
+      SCRAPING_ENABLED: ${SCRAPING_ENABLED:-true}
+      MAX_POSTS_PER_SCRAPE: ${MAX_POSTS_PER_SCRAPE:-100}
+      DOWNLOAD_MAX_FILE_SIZE_MB: ${DOWNLOAD_MAX_FILE_SIZE_MB:-100}
+      DOWNLOAD_MAX_DURATION_SECONDS: ${DOWNLOAD_MAX_DURATION_SECONDS:-600}
+      # Vast.ai (Cloud Training)
+      VASTAI_API_KEY: ${VASTAI_API_KEY:-}
+      # Host-machine access (llama-server control over SSH)
+      LLM_HOST_IP: ${LLM_HOST_IP:-host.docker.internal}
+      LLM_HOST_SSH_USER: ${LLM_HOST_SSH_USER:-ubuntu}
+      LLM_HOST_SSH_PASSWORD: ${LLM_HOST_SSH_PASSWORD:-}
+      LLM_HOST_SSH_KEY_PATH: ${LLM_HOST_SSH_KEY_PATH:-}
+    volumes:
+      - ./:/app
+      - video_data:/data/videos
+      - ./config:/app/config
+      - training_models:/data/training_models  # Persist trained LoRA models (outside /app to avoid bind mount conflict)
+      - background_videos:/data/background_videos  # Shared with the scraper worker for watermark filtering
+      - composed_videos:/data/composed_videos  # Output for composed caption videos
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - captions-network
+    restart: unless-stopped
+
+  # Celery Worker - ML Tagging (Both GPUs)
+  # Dedicated worker for background video scene tagging (InternVL3-14B served by
+  # the host llama-server's VLM profile). Has access to BOTH GPUs; the orchestrator
+  # swaps llama-server profiles around each tagging batch.
+  celery-worker-ml-tagging:
+    build: .
+    container_name: captions-celery-worker-ml-tagging
+    command: celery -A tasks.celery_app worker --loglevel=info --concurrency=1 --pool=solo -Q ml_tagging -n ml-tagging-worker@%h
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    runtime: nvidia
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              device_ids: ['0', '1']
+              capabilities: [gpu]
+    environment:
+      NVIDIA_VISIBLE_DEVICES: "all"
+      NVIDIA_DRIVER_CAPABILITIES: compute,utility
+      LD_LIBRARY_PATH: /usr/lib/x86_64-linux-gnu:/usr/local/nvidia/lib:/usr/local/nvidia/lib64
+      CUDA_LAUNCH_BLOCKING: "1"
+      LLM_POSTPROCESS_ENABLED: "false"
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_DB: ${POSTGRES_DB:-captions}
+      POSTGRES_USER: ${POSTGRES_USER:-captionsuser}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-}
+      CELERY_BROKER_URL: "redis://${REDIS_PASSWORD:+:$REDIS_PASSWORD@}redis:6379/0"
+      CELERY_RESULT_BACKEND: "redis://${REDIS_PASSWORD:+:$REDIS_PASSWORD@}redis:6379/1"
+      VIDEO_STORAGE_PATH: /data/videos
+      # Host-machine access (llama-server control over SSH)
+      LLM_HOST_IP: ${LLM_HOST_IP:-host.docker.internal}
+      LLM_HOST_SSH_USER: ${LLM_HOST_SSH_USER:-ubuntu}
+      LLM_HOST_SSH_PASSWORD: ${LLM_HOST_SSH_PASSWORD:-}
+      LLM_HOST_SSH_KEY_PATH: ${LLM_HOST_SSH_KEY_PATH:-}
+    volumes:
+      - vastai_ssh:/root/.ssh  # host SSH key for llama-server profile switching
+      - ./:/app
+      - video_data:/data/videos
+      - ./config:/app/config
+      - background_videos:/data/background_videos
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - captions-network
+    restart: unless-stopped
+
+  # Celery Worker - Scraping, Maintenance & Publishing (No GPU)
+  celery-worker-scraper:
+    build: .
+    container_name: captions-celery-worker-scraper
+    command: celery -A tasks.celery_app worker --loglevel=info --concurrency=5 --pool=prefork -Q scraping,maintenance,publishing -n scraper-worker@%h
+    healthcheck:
+      test: ["CMD-SHELL", "celery -A tasks.celery_app inspect ping -d celery@$HOSTNAME || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    extra_hosts:
+      - "host.docker.internal:host-gateway"  # Allow access to llama-server on host
+    environment:
+      # Playwright (no API needed!)
+      PLAYWRIGHT_HEADLESS: ${PLAYWRIGHT_HEADLESS:-true}
+      PLAYWRIGHT_TIMEOUT: ${PLAYWRIGHT_TIMEOUT:-30000}
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_DB: ${POSTGRES_DB:-captions}
+      POSTGRES_USER: ${POSTGRES_USER:-captionsuser}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-}
+      CELERY_BROKER_URL: "redis://${REDIS_PASSWORD:+:$REDIS_PASSWORD@}redis:6379/0"
+      CELERY_RESULT_BACKEND: "redis://${REDIS_PASSWORD:+:$REDIS_PASSWORD@}redis:6379/1"
+      VIDEO_STORAGE_PATH: /data/videos
+      SCRAPING_ENABLED: ${SCRAPING_ENABLED:-true}
+      MAX_POSTS_PER_SCRAPE: ${MAX_POSTS_PER_SCRAPE:-100}
+      DOWNLOAD_MAX_FILE_SIZE_MB: ${DOWNLOAD_MAX_FILE_SIZE_MB:-100}
+      DOWNLOAD_MAX_DURATION_SECONDS: ${DOWNLOAD_MAX_DURATION_SECONDS:-600}
+      # Reddit posting credentials (for publishing)
+      REDDIT_POSTER_TYPE: ${REDDIT_POSTER_TYPE:-playwright}
+      REDDIT_USERNAME: ${REDDIT_USERNAME:-}
+      REDDIT_PASSWORD: ${REDDIT_PASSWORD:-}
+      # Postpone (Scheduled Reddit Posting)
+      POSTPONE_API_KEY: ${POSTPONE_API_KEY:-}
+      # Media host (composed videos are served from this API by default)
+      MEDIA_BASE_URL: ${MEDIA_BASE_URL:-}
+      MEDIA_HOST_TYPE: ${MEDIA_HOST_TYPE:-self}
+      # Host-machine access (llama-server control over SSH)
+      LLM_HOST_IP: ${LLM_HOST_IP:-host.docker.internal}
+      LLM_HOST_SSH_USER: ${LLM_HOST_SSH_USER:-ubuntu}
+      LLM_HOST_SSH_PASSWORD: ${LLM_HOST_SSH_PASSWORD:-}
+      LLM_HOST_SSH_KEY_PATH: ${LLM_HOST_SSH_KEY_PATH:-}
+      # Patreon→Telegram membership sync (sync task runs on `maintenance` queue)
+      PATREON_MOTIVATION_CLIENT_ID: ${PATREON_MOTIVATION_CLIENT_ID:-}
+      PATREON_MOTIVATION_CLIENT_SECRET: ${PATREON_MOTIVATION_CLIENT_SECRET:-}
+      PATREON_MOTIVATION_ACCESS_TOKEN: ${PATREON_MOTIVATION_ACCESS_TOKEN:-}
+      PATREON_MOTIVATION_REFRESH_TOKEN: ${PATREON_MOTIVATION_REFRESH_TOKEN:-}
+      PATREON_MOTIVATION_CAMPAIGN_ID: ${PATREON_MOTIVATION_CAMPAIGN_ID:-}
+      PATREON_MOTIVATION_POST_ID: ${PATREON_MOTIVATION_POST_ID:-}
+    volumes:
+      - vastai_ssh:/root/.ssh  # host SSH key for llama-server control + LoRA conversion
+      - ./:/app
+      - video_data:/data/videos
+      - composed_videos:/data/composed_videos  # For publishing composed videos
+      - training_models:/data/training_models  # Read-only access for orchestrator model validation
+      - patreon_cookies:/data/patreon_cookies  # Session cookies for Patreon publishing
+      - patreon_tokens:/data/patreon_tokens  # Patreon OAuth refresh tokens (rotated)
+      - lora_adapters:/data/lora_adapters  # LoRA adapter files for orchestrator validation
+      - background_videos:/data/background_videos  # Reddit background video downloads
+      - ./config:/app/config
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - captions-network
+    restart: unless-stopped
+
+  # Celery Worker - Composition (CPU-bound video composition, no GPU needed)
+  # Composition is moviepy + PIL + ffmpeg. Decoupled from the gpu queue so
+  # OCR/extraction backlogs don't block recomposes and approval-cycle work.
+  celery-worker-composition:
+    build: .
+    container_name: captions-celery-worker-composition
+    command: celery -A tasks.celery_app worker --loglevel=info --concurrency=2 --pool=prefork -Q composition -n composition-worker@%h
+    healthcheck:
+      test: ["CMD-SHELL", "celery -A tasks.celery_app inspect ping -d celery@$HOSTNAME || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    environment:
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_DB: ${POSTGRES_DB:-captions}
+      POSTGRES_USER: ${POSTGRES_USER:-captionsuser}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-}
+      CELERY_BROKER_URL: "redis://${REDIS_PASSWORD:+:$REDIS_PASSWORD@}redis:6379/0"
+      CELERY_RESULT_BACKEND: "redis://${REDIS_PASSWORD:+:$REDIS_PASSWORD@}redis:6379/1"
+      VIDEO_STORAGE_PATH: /data/videos
+    volumes:
+      - ./:/app
+      - video_data:/data/videos
+      - composed_videos:/data/composed_videos
+      - background_videos:/data/background_videos
+      - ./config:/app/config
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - captions-network
+    restart: unless-stopped
+
+  # Celery Beat (Scheduler for Periodic Tasks)
+  celery-beat:
+    build: .
+    container_name: captions-celery-beat
+    command: celery -A tasks.celery_app beat --loglevel=info
+    healthcheck:
+      test: ["CMD-SHELL", "ps aux | grep 'celery.*beat' | grep -v grep || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    environment:
+      POSTGRES_HOST: postgres
+      POSTGRES_DB: ${POSTGRES_DB:-captions}
+      POSTGRES_USER: ${POSTGRES_USER:-captionsuser}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-}
+      CELERY_BROKER_URL: "redis://${REDIS_PASSWORD:+:$REDIS_PASSWORD@}redis:6379/0"
+      CELERY_RESULT_BACKEND: "redis://${REDIS_PASSWORD:+:$REDIS_PASSWORD@}redis:6379/1"
+      SCRAPING_INTERVAL_HOURS: ${SCRAPING_INTERVAL_HOURS:-6}
+      # Watchdog auto-recovery: set to 'true' to auto-restart hung workers
+      WATCHDOG_AUTO_RECOVERY: ${WATCHDOG_AUTO_RECOVERY:-false}
+    volumes:
+      - ./:/app
+      - ./config:/app/config
+      # Mount docker socket for worker restart capability (watchdog)
+      - /var/run/docker.sock:/var/run/docker.sock
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - captions-network
+    restart: unless-stopped
+
+  # Telegram Join Listener — DISABLED 2026-05-07
+  # Was: long-poll chat_join_request for the membership-sync flow (single
+  # instance per bot since Telegram getUpdates is single-consumer). Disabled
+  # because membership add/remove is being handled manually for now.
+  # To re-enable: uncomment the service block and run `docker-compose up -d
+  # telegram-join-listener`. Code in services/telegram_join_listener.py is
+  # kept intact so re-enabling is a one-step change.
+  # telegram-join-listener:
+  #   build: .
+  #   container_name: captions-telegram-join-listener
+  #   command: python -m services.telegram_join_listener
+  #   environment:
+  #     POSTGRES_HOST: postgres
+  #     POSTGRES_PORT: 5432
+  #     POSTGRES_DB: ${POSTGRES_DB:-captions}
+  #     POSTGRES_USER: ${POSTGRES_USER:-captionsuser}
+  #     POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+  #     REDIS_HOST: redis
+  #     REDIS_PORT: 6379
+  #     REDIS_PASSWORD: ${REDIS_PASSWORD:-}
+  #     CELERY_BROKER_URL: "redis://${REDIS_PASSWORD:+:$REDIS_PASSWORD@}redis:6379/0"
+  #     CELERY_RESULT_BACKEND: "redis://${REDIS_PASSWORD:+:$REDIS_PASSWORD@}redis:6379/1"
+  #     TELEGRAM_LISTENER_NICHE: ${TELEGRAM_LISTENER_NICHE:-motivation}
+  #   volumes:
+  #     - ./:/app
+  #   depends_on:
+  #     postgres:
+  #       condition: service_healthy
+  #     redis:
+  #       condition: service_healthy
+  #   networks:
+  #     - captions-network
+  #   restart: unless-stopped
+
+  # Flower (Celery Monitoring Dashboard)
+  flower:
+    build: .
+    container_name: captions-flower
+    command: celery -A tasks.celery_app flower --port=5555 ${FLOWER_BASIC_AUTH:+--basic_auth=$FLOWER_BASIC_AUTH}
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:5555 || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    environment:
+      CELERY_BROKER_URL: "redis://${REDIS_PASSWORD:+:$REDIS_PASSWORD@}redis:6379/0"
+      CELERY_RESULT_BACKEND: "redis://${REDIS_PASSWORD:+:$REDIS_PASSWORD@}redis:6379/1"
+      FLOWER_PORT: 5555
+    ports:
+      - "5555:5555"
+    depends_on:
+      - redis
+    networks:
+      - captions-network
+    restart: unless-stopped
+
+  # Cloudflare tunnel for public access (captions.example.com)
+  tunnel:
+    image: cloudflare/cloudflared:latest
+    container_name: captions-tunnel
+    restart: unless-stopped
+    command: tunnel --no-autoupdate run --token ${CLOUDFLARE_TUNNEL_TOKEN}
+    depends_on:
+      - api
+    networks:
+      - captions-network
+
+networks:
+  captions-network:
+    driver: bridge
+
+volumes:
+  postgres_data:
+  redis_data:
+  video_data:
+  training_models:  # Persistent storage for trained LoRA models
+  background_videos:  # Storage for background videos
+  composed_videos:  # Storage for composed caption videos
+  patreon_cookies:  # Session cookies for Patreon publishing
+  lora_adapters:  # LoRA adapter files for llama-server
+  vastai_ssh:  # SSH keys for Vast.ai instance access
+  patreon_tokens:  # Patreon OAuth refresh tokens (rotated, persisted across rebuilds)

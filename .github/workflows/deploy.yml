@@ -1,0 +1,405 @@
+# Continuous deployment for the captions pipeline.
+#
+# Runs on a self-hosted GitHub Actions runner installed on the VM that hosts
+# the docker-compose stack. One-time setup on that VM:
+#   1. Repo -> Settings -> Actions -> Runners -> "New self-hosted runner" and
+#      follow the install steps. The runner usually lives in
+#      $HOME/actions-runner; register it as a service with
+#      `./svc.sh install && ./svc.sh start`.
+#   2. The runner user needs docker access, `docker-compose` on PATH, and
+#      passwordless sudo (the cleanup steps below remove root-owned files
+#      created by containers on the bind-mounted checkout).
+#   3. Add every secret referenced in "Create .env file from secrets" under
+#      Settings -> Secrets and variables -> Actions.
+#   4. If you run several self-hosted runners, give this one a label and change
+#      `runs-on: self-hosted` to `runs-on: [self-hosted, <label>]`.
+#
+# The runner checks the repo out into its workspace
+# ($HOME/actions-runner/_work/<repo>/<repo>), which is also the docker-compose
+# project directory. COMPOSE_PROJECT_NAME pins the compose project name so
+# volume/network names do not depend on that directory name.
+name: Deploy Captions Service
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+env:
+  COMPOSE_PROJECT_NAME: captions
+
+jobs:
+  # Check what changed to determine deployment strategy
+  detect-changes:
+    runs-on: self-hosted
+    outputs:
+      docs-only: ${{ steps.filter.outputs.docs-only }}
+      api-changed: ${{ steps.filter.outputs.api }}
+      celery-changed: ${{ steps.filter.outputs.celery }}
+      database-changed: ${{ steps.filter.outputs.database }}
+      docker-changed: ${{ steps.filter.outputs.docker }}
+      any-code-changed: ${{ steps.filter.outputs.any-code }}
+    steps:
+      - name: Clean up Python cache files and training data
+        run: |
+          echo "Cleaning up Python cache files with sudo..."
+          sudo find . -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
+          sudo rm -f .env celerybeat-schedule.db 2>/dev/null || true
+          # Clean up training data files created by Docker (root ownership)
+          sudo rm -rf training/data/*.jsonl 2>/dev/null || true
+          sudo rm -rf training/models 2>/dev/null || true
+          echo "Cleanup complete"
+
+      - name: Checkout code
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0  # Fetch full history to detect all changes
+
+      - name: Detect changed files
+        id: filter
+        run: |
+          # Get the base ref for comparison (origin/main before this push)
+          # For push events, compare against origin/main@{1} or use HEAD~10 as fallback
+          BASE_REF=$(git rev-parse origin/main~1 2>/dev/null || git rev-parse HEAD~10 2>/dev/null || echo "HEAD^")
+          CHANGED_FILES=$(git diff --name-only $BASE_REF HEAD 2>/dev/null || git diff --name-only HEAD^ HEAD || echo "")
+          echo "Changed files:"
+          echo "$CHANGED_FILES"
+
+          # Check if only documentation changed
+          DOCS_ONLY=true
+          API_CHANGED=false
+          CELERY_CHANGED=false
+          DATABASE_CHANGED=false
+          DOCKER_CHANGED=false
+          ANY_CODE_CHANGED=false
+
+          while IFS= read -r file; do
+            case "$file" in
+              # Documentation files (skip deployment)
+              *.md|LICENSE|.gitignore)
+                echo "Documentation file: $file"
+                ;;
+              # GitHub Actions workflows (infrastructure changes - rebuild all)
+              .github/workflows/*)
+                echo "Workflow file: $file"
+                DOCKER_CHANGED=true
+                API_CHANGED=true
+                CELERY_CHANGED=true
+                DOCS_ONLY=false
+                ANY_CODE_CHANGED=true
+                ;;
+              # API changes
+              api/*|scrapers/*|config/*)
+                echo "API/scraper file: $file"
+                API_CHANGED=true
+                CELERY_CHANGED=true  # Scrapers run in celery
+                DOCS_ONLY=false
+                ANY_CODE_CHANGED=true
+                ;;
+              # Celery worker changes
+              tasks/*|training/*)
+                echo "Celery task file: $file"
+                CELERY_CHANGED=true
+                DOCS_ONLY=false
+                ANY_CODE_CHANGED=true
+                ;;
+              # Database changes
+              database/*)
+                echo "Database file: $file"
+                DATABASE_CHANGED=true
+                API_CHANGED=true
+                CELERY_CHANGED=true
+                DOCS_ONLY=false
+                ANY_CODE_CHANGED=true
+                ;;
+              # Docker/dependency changes (rebuild all)
+              Dockerfile|docker-compose.yml|requirements.txt)
+                echo "Docker/dependency file: $file"
+                DOCKER_CHANGED=true
+                API_CHANGED=true
+                CELERY_CHANGED=true
+                DOCS_ONLY=false
+                ANY_CODE_CHANGED=true
+                ;;
+              # Utility changes
+              utils/*)
+                echo "Utility file: $file"
+                API_CHANGED=true
+                CELERY_CHANGED=true
+                DOCS_ONLY=false
+                ANY_CODE_CHANGED=true
+                ;;
+              # Any other file = code change
+              *)
+                echo "Other file: $file"
+                DOCS_ONLY=false
+                ANY_CODE_CHANGED=true
+                ;;
+            esac
+          done <<< "$CHANGED_FILES"
+
+          echo "docs-only=$DOCS_ONLY" >> $GITHUB_OUTPUT
+          echo "api=$API_CHANGED" >> $GITHUB_OUTPUT
+          echo "celery=$CELERY_CHANGED" >> $GITHUB_OUTPUT
+          echo "database=$DATABASE_CHANGED" >> $GITHUB_OUTPUT
+          echo "docker=$DOCKER_CHANGED" >> $GITHUB_OUTPUT
+          echo "any-code=$ANY_CODE_CHANGED" >> $GITHUB_OUTPUT
+
+          echo "=== Deployment Decision ==="
+          echo "Documentation only: $DOCS_ONLY"
+          echo "API changed: $API_CHANGED"
+          echo "Celery changed: $CELERY_CHANGED"
+          echo "Database changed: $DATABASE_CHANGED"
+          echo "Docker changed: $DOCKER_CHANGED"
+          echo "Any code changed: $ANY_CODE_CHANGED"
+
+  # Deploy job - always runs, uses smart service detection
+  deploy:
+    needs: detect-changes
+    runs-on: self-hosted
+    steps:
+      - name: Clean up old files
+        run: |
+          sudo rm -rf ./* || true
+          sudo rm -rf ./.* || true
+
+      - name: Clean up Docker resources and logs
+        run: |
+          # Only prune dangling images (not build cache!)
+          # -a flag removes ALL unused images including build cache = 30+ min rebuilds
+          docker image prune -f || true
+          docker container prune -f || true
+          # Runner diagnostics logs grow without bound; adjust if your runner
+          # is installed somewhere other than $HOME/actions-runner.
+          sudo rm -rf "$HOME/actions-runner/_diag"/* || true
+
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Create .env file from secrets
+        run: |
+          cat > .env << EOF
+          # Application
+          ENVIRONMENT=production
+          DEBUG=false
+
+          # Playwright (NO API CREDENTIALS NEEDED!)
+          PLAYWRIGHT_HEADLESS=true
+          PLAYWRIGHT_TIMEOUT=30000
+
+          # Database
+          POSTGRES_DB=${{ secrets.POSTGRES_DB }}
+          POSTGRES_USER=${{ secrets.POSTGRES_USER }}
+          POSTGRES_PASSWORD=${{ secrets.POSTGRES_PASSWORD }}
+
+          # Redis
+          REDIS_PASSWORD=${{ secrets.REDIS_PASSWORD || '' }}
+
+          # Scraping Configuration
+          SCRAPING_ENABLED=${{ secrets.SCRAPING_ENABLED || 'true' }}
+          SCRAPING_INTERVAL_HOURS=${{ secrets.SCRAPING_INTERVAL_HOURS || '8' }}
+          MAX_POSTS_PER_SCRAPE=${{ secrets.MAX_POSTS_PER_SCRAPE || '50' }}
+          DOWNLOAD_MAX_FILE_SIZE_MB=${{ secrets.DOWNLOAD_MAX_FILE_SIZE_MB || '100' }}
+          DOWNLOAD_MAX_DURATION_SECONDS=${{ secrets.DOWNLOAD_MAX_DURATION_SECONDS || '600' }}
+
+          # Flower
+          FLOWER_BASIC_AUTH=${{ secrets.FLOWER_BASIC_AUTH || 'admin:changeme' }}
+
+          # Vast.ai Configuration (for cloud training)
+          VASTAI_API_KEY=${{ secrets.VASTAI_API_KEY }}
+
+          # Media host: public base URL of this API, where composed videos are
+          # served from for Reddit/Postpone link posts (e.g. the tunnel URL)
+          MEDIA_BASE_URL=${{ secrets.MEDIA_BASE_URL || '' }}
+
+          # Postpone (Scheduled Reddit Posting)
+          POSTPONE_API_KEY=${{ secrets.POSTPONE_API_KEY || '' }}
+
+          # LLM host access (llama-server start/stop and LoRA -> GGUF conversion
+          # run over SSH on the GPU host). Prefer a key path mounted into the
+          # containers; a password is used via sshpass only if no key is set.
+          LLM_HOST_IP=${{ secrets.LLM_HOST_IP || 'host.docker.internal' }}
+          LLM_HOST_SSH_USER=${{ secrets.LLM_HOST_SSH_USER || 'ubuntu' }}
+          LLM_HOST_SSH_KEY_PATH=${{ secrets.LLM_HOST_SSH_KEY_PATH || '' }}
+          LLM_HOST_SSH_PASSWORD=${{ secrets.LLM_HOST_SSH_PASSWORD || '' }}
+
+          # Cloudflare Tunnel
+          CLOUDFLARE_TUNNEL_TOKEN=${{ secrets.CLOUDFLARE_TUNNEL_TOKEN || '' }}
+
+          # Patreon→Telegram Membership Sync (per-niche creator OAuth client)
+          PATREON_MOTIVATION_CLIENT_ID=${{ secrets.PATREON_MOTIVATION_CLIENT_ID || '' }}
+          PATREON_MOTIVATION_CLIENT_SECRET=${{ secrets.PATREON_MOTIVATION_CLIENT_SECRET || '' }}
+          PATREON_MOTIVATION_ACCESS_TOKEN=${{ secrets.PATREON_MOTIVATION_ACCESS_TOKEN || '' }}
+          PATREON_MOTIVATION_REFRESH_TOKEN=${{ secrets.PATREON_MOTIVATION_REFRESH_TOKEN || '' }}
+          PATREON_MOTIVATION_CAMPAIGN_ID=${{ secrets.PATREON_MOTIVATION_CAMPAIGN_ID || '' }}
+          PATREON_MOTIVATION_POST_ID=${{ secrets.PATREON_MOTIVATION_POST_ID || '' }}
+          EOF
+
+      # Check for active GPU tasks before deploying
+      - name: Check for active GPU tasks
+        id: gpu-check
+        run: |
+          echo "=== Checking for active GPU tasks ==="
+
+          # Check pipeline state (5s connect, 10s max - prevents hanging if API is down)
+          PIPELINE_STATE=$(curl -s --connect-timeout 5 --max-time 10 http://localhost:8000/pipeline/state 2>/dev/null || echo '{"state":"unknown"}')
+          STATE=$(echo "$PIPELINE_STATE" | python3 -c "import sys,json; print(json.load(sys.stdin).get('state','unknown'))" 2>/dev/null || echo "unknown")
+
+          echo "Pipeline state: $STATE"
+
+          # Check for active jobs (5s connect, 10s max)
+          ACTIVE_JOBS=$(curl -s --connect-timeout 5 --max-time 10 http://localhost:8000/pipeline/jobs/active 2>/dev/null || echo '{}')
+          TRAINING_JOB=$(echo "$ACTIVE_JOBS" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('active_jobs',{}).get('training') or 'null')" 2>/dev/null || echo "null")
+          GENERATION_JOB=$(echo "$ACTIVE_JOBS" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('active_jobs',{}).get('generation') or 'null')" 2>/dev/null || echo "null")
+          COMPOSITION_JOB=$(echo "$ACTIVE_JOBS" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('active_jobs',{}).get('composition') or 'null')" 2>/dev/null || echo "null")
+
+          echo "Training job: $TRAINING_JOB"
+          echo "Generation job: $GENERATION_JOB"
+          echo "Composition job: $COMPOSITION_JOB"
+
+          # Determine if GPU workers should be skipped
+          SKIP_GPU_WORKERS=false
+          if [ "$STATE" == "training" ] || [ "$STATE" == "generating" ] || [ "$STATE" == "composing" ]; then
+            SKIP_GPU_WORKERS=true
+            echo "⚠️ Active GPU task detected (state: $STATE) - will skip GPU worker restart"
+          elif [ "$TRAINING_JOB" != "null" ] || [ "$GENERATION_JOB" != "null" ] || [ "$COMPOSITION_JOB" != "null" ]; then
+            SKIP_GPU_WORKERS=true
+            echo "⚠️ Active GPU job detected - will skip GPU worker restart"
+          else
+            echo "✓ No active GPU tasks - safe to restart all workers"
+          fi
+
+          echo "skip-gpu-workers=$SKIP_GPU_WORKERS" >> $GITHUB_OUTPUT
+
+      # Zero-downtime deployment strategy
+      - name: Deploy with zero downtime
+        run: |
+          echo "=== Starting Zero-Downtime Deployment ==="
+
+          SKIP_GPU="${{ steps.gpu-check.outputs.skip-gpu-workers }}"
+          echo "Skip GPU workers: $SKIP_GPU"
+
+          # Strategy:
+          # 1. Build new images WITHOUT stopping containers
+          # 2. Start new containers alongside old ones
+          # 3. Docker Compose handles graceful switchover
+          # 4. Old containers are stopped only after new ones are healthy
+          # 5. SKIP GPU workers if active tasks are running
+
+          if [ "${{ needs.detect-changes.outputs.docker-changed }}" == "true" ]; then
+            echo "Docker/dependencies changed - rebuilding all services..."
+            # Clean cache files before rebuild
+            sudo rm -f celerybeat-schedule.db
+            sudo find . -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
+            docker-compose build
+            if [ "$SKIP_GPU" == "true" ]; then
+              echo "⚠️ Skipping GPU workers (active tasks) - updating non-GPU services only"
+              docker-compose up -d --no-deps --remove-orphans api celery-worker-scraper celery-worker-composition celery-beat flower postgres redis
+            else
+              docker-compose up -d --remove-orphans
+            fi
+          elif [ "${{ needs.detect-changes.outputs.api-changed }}" == "true" ] && [ "${{ needs.detect-changes.outputs.celery-changed }}" == "true" ]; then
+            echo "API and Celery changed - updating both services..."
+            # Stop celery-beat first to release schedule lock
+            docker-compose down celery-beat
+            # Clean cache files
+            sudo rm -f celerybeat-schedule.db
+            sudo find . -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
+            if [ "$SKIP_GPU" == "true" ]; then
+              echo "⚠️ Skipping GPU workers (active tasks) - updating non-GPU services only"
+              docker-compose build api celery-worker-scraper celery-worker-composition celery-beat
+              docker-compose up -d --no-deps --remove-orphans api celery-worker-scraper celery-worker-composition celery-beat flower
+            else
+              docker-compose build api celery-worker celery-worker-gpu-2 celery-worker-ml-tagging celery-worker-scraper celery-worker-composition celery-beat
+              docker-compose up -d --no-deps --remove-orphans api celery-worker celery-worker-gpu-2 celery-worker-ml-tagging celery-worker-scraper celery-worker-composition celery-beat flower
+            fi
+          elif [ "${{ needs.detect-changes.outputs.api-changed }}" == "true" ]; then
+            echo "API changed - updating API service only..."
+            docker-compose build api
+            docker-compose up -d --no-deps --remove-orphans api
+          elif [ "${{ needs.detect-changes.outputs.celery-changed }}" == "true" ]; then
+            echo "Celery changed - updating worker services..."
+            # Stop celery-beat first to release schedule lock
+            docker-compose down celery-beat
+            # Clean celery beat cache files that persist old schedules
+            sudo rm -f celerybeat-schedule.db
+            sudo find . -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
+            if [ "$SKIP_GPU" == "true" ]; then
+              echo "⚠️ Skipping GPU workers (active tasks) - updating non-GPU services only"
+              docker-compose build celery-worker-scraper celery-worker-composition celery-beat
+              docker-compose up -d --no-deps --remove-orphans celery-worker-scraper celery-worker-composition celery-beat flower
+            else
+              docker-compose build celery-worker celery-worker-gpu-2 celery-worker-ml-tagging celery-worker-scraper celery-worker-composition celery-beat
+              docker-compose up -d --no-deps --remove-orphans celery-worker celery-worker-gpu-2 celery-worker-ml-tagging celery-worker-scraper celery-worker-composition celery-beat flower
+            fi
+          else
+            echo "Code changed but no specific service detected - safe rebuild all..."
+            docker-compose build
+            if [ "$SKIP_GPU" == "true" ]; then
+              echo "⚠️ Skipping GPU workers (active tasks) - updating non-GPU services only"
+              docker-compose up -d --no-deps --remove-orphans api celery-worker-scraper celery-worker-composition celery-beat flower postgres redis
+            else
+              docker-compose up -d --remove-orphans
+            fi
+          fi
+
+          echo "✓ Deployment initiated with zero-downtime strategy"
+
+      - name: Wait for services to be healthy
+        run: |
+          echo "Waiting for services to stabilize..."
+          sleep 20
+
+          # Wait for API health check (max 60 seconds, 10s timeout per attempt)
+          for i in {1..12}; do
+            if curl -f --connect-timeout 5 --max-time 10 http://localhost:8000/health > /dev/null 2>&1; then
+              echo "✓ API is healthy"
+              break
+            fi
+            echo "Waiting for API... (attempt $i/12)"
+            sleep 5
+          done
+
+      - name: Verify deployment
+        run: |
+          echo "=== Deployment Verification ==="
+
+          # Check API health (10s timeout)
+          if ! curl -f --connect-timeout 5 --max-time 10 http://localhost:8000/health; then
+            echo "❌ API health check failed"
+            docker-compose logs --tail=100 api
+            exit 1
+          fi
+          echo "✓ API is responding"
+
+          # Check Flower (may require auth, 10s timeout)
+          curl -f --connect-timeout 5 --max-time 10 http://localhost:5555 || echo "⚠ Flower dashboard requires authentication"
+
+          # Verify containers are running
+          echo ""
+          echo "=== Container Status ==="
+          docker-compose ps
+
+          # Check for any failed containers
+          FAILED=$(docker-compose ps --filter "status=exited" --format "{{.Service}}" | wc -l)
+          if [ "$FAILED" -gt 0 ]; then
+            echo "❌ Some containers failed to start:"
+            docker-compose ps --filter "status=exited"
+            docker-compose logs --tail=100
+            exit 1
+          fi
+
+          echo "✓ All services are running"
+
+      - name: Cleanup old images
+        run: |
+          echo "Cleaning up old Docker images..."
+          docker image prune -f
+          echo "✓ Cleanup complete"
+
+      - name: Show recent logs
+        if: always()
+        run: |
+          echo "=== Recent Logs ==="
+          docker-compose logs --tail=50
+

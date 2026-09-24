@@ -1,0 +1,60 @@
+# systemd unit for the llama.cpp server that backs LLM refinement, caption
+# generation (with per-niche LoRA adapters) and caption judging.
+#
+# Install on the GPU host:
+#   sudo cp scripts/llama-server.service /etc/systemd/system/
+#   sudo systemctl daemon-reload && sudo systemctl enable --now llama-server
+#
+# The pipeline containers reach it at http://host.docker.internal:${PORT}
+# and can stop/start it over SSH (see utils/llama_server_control.py, which
+# reads LLM_HOST_IP / LLM_HOST_SSH_USER / LLM_HOST_SSH_KEY_PATH from .env).
+# Paths below must match LLM_HOST_LLAMA_CPP_DIR / LLM_HOST_MODELS_DIR if you
+# override those env vars.
+
+[Unit]
+Description=llama.cpp server (Mistral-Small-24B-Instruct)
+After=network.target
+
+[Service]
+Type=simple
+# EDIT ME: the account that owns the llama.cpp checkout and the models
+# directory. Must match LLM_HOST_SSH_USER in .env (default: ubuntu).
+User=ubuntu
+Group=ubuntu
+# EDIT ME: llama.cpp checkout (default for LLM_HOST_LLAMA_CPP_DIR)
+WorkingDirectory=/opt/llama.cpp
+
+# EDIT ME: base model GGUF. Any Q4_K_M-class quantization of
+# Mistral-Small-24B-Instruct works; ~14 GB on disk.
+Environment="MODEL_PATH=/opt/models/Mistral-Small-24B-Instruct-2501-Q4_K_M.gguf"
+
+# GPU configuration. Example values for a two-GPU host (11 GB + 8 GB):
+# split weights 55:45 and offload 35 of the 41 layers so the KV cache fits.
+# On a single 24 GB GPU set N_GPU_LAYERS=99 and drop --tensor-split.
+Environment="TENSOR_SPLIT=0.55,0.45"
+Environment="N_GPU_LAYERS=35"
+Environment="CTX_SIZE=1024"
+
+# Bind address/port. PORT must match LLAMA_SERVER_PORT in the containers.
+Environment="HOST=0.0.0.0"
+Environment="PORT=1234"
+
+ExecStart=/opt/llama.cpp/build/bin/llama-server \
+    --model ${MODEL_PATH} \
+    --host ${HOST} \
+    --port ${PORT} \
+    --split-mode layer \
+    --tensor-split ${TENSOR_SPLIT} \
+    --n-gpu-layers ${N_GPU_LAYERS} \
+    --ctx-size ${CTX_SIZE}
+
+# Restart on failure
+Restart=on-failure
+RestartSec=10
+
+# Logging
+StandardOutput=append:/var/log/llama-server.log
+StandardError=append:/var/log/llama-server.log
+
+[Install]
+WantedBy=multi-user.target
