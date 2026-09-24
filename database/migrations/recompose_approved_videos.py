@@ -54,7 +54,7 @@ def find_best_background(db, caption_text, caption_tags, niche, used_bg_ids):
         score = min(bg.views / 10000, 10) if bg.views else 0
 
         if caption_action_set and bg.ml_tags:
-            bg_actions = set(bg.ml_tags.get('actions', []))
+            bg_actions = set(bg.ml_tags.get('activities', []))
             if bg_actions:
                 overlap = caption_action_set & bg_actions
                 if overlap:
@@ -105,7 +105,7 @@ def run():
                 skipped += 1
                 continue
 
-            bg_actions = new_bg.ml_tags.get('actions', []) if new_bg.ml_tags else []
+            bg_actions = new_bg.ml_tags.get('activities', []) if new_bg.ml_tags else []
             print(f"  [{cv.id}] caption_tags={caption_tags} -> BG {new_bg.id} (score={score:.1f}, actions={bg_actions})")
 
             try:

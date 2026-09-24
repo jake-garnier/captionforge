@@ -416,7 +416,7 @@ async def list_generated_captions(
                     "llm_model": c.llm_model,
                     "generation_job_id": c.generation_job_id,
                     "temperature": c.temperature,
-                    "tags": c.tags or [],  # Action/position tags for background matching
+                    "tags": c.tags or [],  # Activity tags for background matching
                     "niche": c.niche,  # Niche category (motivation, fitness, etc.)
                     "generated_at": c.generated_at.isoformat() if c.generated_at else None,
                     # Stage 3 LLM judge fields
@@ -784,7 +784,7 @@ async def get_caption(caption_id: int, db: Session = Depends(get_db)):
             "temperature": caption.temperature,
             "top_p": caption.top_p,
             "max_tokens": caption.max_tokens,
-            "tags": caption.tags or [],  # Action/position tags for background matching
+            "tags": caption.tags or [],  # Activity tags for background matching
             "generated_at": caption.generated_at.isoformat() if caption.generated_at else None
         }
     except HTTPException:

@@ -108,7 +108,7 @@ class GeneratedCaption(Base):
     quality_score = Column(Float)
     status = Column(String(20), default="pending_review", index=True)  # pending_review, approved, rejected, published
     is_favorite = Column(Boolean, default=False)  # User can mark favorites
-    tags = Column(JSON, default=list)  # Action/position tags extracted from caption content
+    tags = Column(JSON, default=list)  # Activity tags extracted from caption content
     niche = Column(String(50), nullable=True, index=True)  # motivation, fitness, cooking, travel
     generated_at = Column(TIMESTAMP(timezone=True), server_default=func.now())
 

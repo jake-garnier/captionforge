@@ -691,7 +691,7 @@ def _maybe_dispatch_tagging_batch(batch_size: int = 100):
         if r.get("ml_tagging:running"):
             return False
 
-        # Skip if the user has explicitly disabled tagging
+        # Skip if the user has manually disabled tagging
         enabled = r.get("ml_tagging:enabled")
         if enabled is not None and enabled != b"1":
             return False

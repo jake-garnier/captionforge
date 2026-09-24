@@ -28,7 +28,7 @@ def main():
     prompts = [
         "Generate a motivation caption about transformation:",
         "Generate a motivation caption about perseverance:",
-        "Generate a motivation caption about submission:",
+        "Generate a motivation caption about finishing what you started:",
     ]
 
     print("\n" + "="*80)

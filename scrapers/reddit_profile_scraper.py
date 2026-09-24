@@ -21,9 +21,8 @@ from playwright.sync_api import sync_playwright
 
 logger = logging.getLogger(__name__)
 
-# Tested 2026-05-12 against all 3 production accounts:
-#   Coochieshampoo: 637 followers
-#   Jaded_Control_6464: 5 followers
+# Tested 2026-05-12 against the per-niche Postpone accounts (a few hundred
+# followers down to single digits — the regex handles both).
 # Reddit renders the follower number client-side inside the React app;
 # domcontentloaded + ~4s of wall time gives the count time to populate.
 _FOLLOWER_REGEX = re.compile(r"([\d,]+)\s*[Ff]ollowers?")

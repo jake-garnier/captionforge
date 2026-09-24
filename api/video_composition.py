@@ -557,31 +557,40 @@ def _ml_tag_similarity(prev_tags: dict, candidate_tags: dict) -> float:
     BG resembles what the user just rejected — same flavor, different clip —
     not a random niche-compatible BG.
 
-    Schema (v2 ml_tagging output): {action, actions:[...], position, pov,
-    participants:{count, types:[...]}, setting, multiple_people_visible}.
+    Schema (tasks/ml_tagging.py output): {subjects:[{type, description}],
+    activities:[...], setting, mood, camera, text_on_screen}.
     """
     if not isinstance(prev_tags, dict) or not isinstance(candidate_tags, dict):
         return 0.0
     score = 0.0
 
-    # Actions overlap (+5/match) — strongest signal: oral vs anal vs masturbation.
-    prev_actions = set(prev_tags.get('actions') or [])
-    cand_actions = set(candidate_tags.get('actions') or [])
+    # Activities overlap (+5/match) — strongest signal: e.g. running vs cooking vs hiking.
+    prev_actions = set(prev_tags.get('activities') or [])
+    cand_actions = set(candidate_tags.get('activities') or [])
     if prev_actions and cand_actions:
         score += 5 * len(prev_actions & cand_actions)
 
-    # Participant types overlap (+3/match) — keeps e.g. person/group pairings together.
-    prev_types = set((prev_tags.get('participants') or {}).get('types') or [])
-    cand_types = set((candidate_tags.get('participants') or {}).get('types') or [])
+    # Subject types overlap (+3/match) — keeps e.g. person/food/landscape footage together.
+    def _subject_types(tags: dict) -> set:
+        return {
+            s.get('type') for s in (tags.get('subjects') or [])
+            if isinstance(s, dict) and s.get('type')
+        }
+    prev_types = _subject_types(prev_tags)
+    cand_types = _subject_types(candidate_tags)
     if prev_types and cand_types:
         score += 3 * len(prev_types & cand_types)
 
-    # Same position (+2) — doggy stays doggy, etc.
-    if prev_tags.get('position') and prev_tags.get('position') == candidate_tags.get('position'):
+    # Same mood (+2) — an energetic clip is replaced by another energetic clip.
+    if prev_tags.get('mood') and prev_tags.get('mood') == candidate_tags.get('mood'):
         score += 2
 
-    # Same setting (+1) — bedroom, bathroom, etc. Tiebreaker.
+    # Same setting (+1) — kitchen, gym, outdoors, etc. Tiebreaker.
     if prev_tags.get('setting') and prev_tags.get('setting') == candidate_tags.get('setting'):
+        score += 1
+
+    # Same camera style (+1) — drone stays drone, handheld stays handheld.
+    if prev_tags.get('camera') and prev_tags.get('camera') == candidate_tags.get('camera'):
         score += 1
 
     return score
@@ -1099,8 +1108,8 @@ def _video_to_response(video: ComposedVideo, db: Session) -> ComposedVideoRespon
         bg_video = db.query(BackgroundVideo).filter_by(id=video.background_video_id).first()
         if bg_video:
             # Show ml_tags activities (VLM scene tags) instead of raw source tags
-            if bg_video.ml_tags and bg_video.ml_tags.get('actions'):
-                background_tags = bg_video.ml_tags['actions']
+            if bg_video.ml_tags and bg_video.ml_tags.get('activities'):
+                background_tags = bg_video.ml_tags['activities']
             elif bg_video.tags:
                 background_tags = bg_video.tags if isinstance(bg_video.tags, list) else []
             background_source_url = bg_video.source_url

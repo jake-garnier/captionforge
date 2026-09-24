@@ -308,7 +308,7 @@ def is_garbage_text(text: str) -> bool:
 # from Stage 4 review runs — roughly a quarter of the first two batches
 # were banned for burned-in watermarks that slipped past the generic path.
 #
-# Two reasons to keep this list explicit rather than rely on the generic
+# Two reasons to keep this list spelled out rather than rely on the generic
 # "any non-garbage text → reject" path:
 #   1. OCR sometimes returns the watermark fragmented (e.g. "STOCK" alone
 #      from "shutterstock") which is_garbage_text dismisses as a single
@@ -340,7 +340,7 @@ KNOWN_WATERMARK_REGEXES = [
     re.compile(r'\b[a-z0-9-]{3,}\.(com|net|org|io|tv)/[a-z0-9_-]+', re.IGNORECASE),
     # Bare "www." domains
     re.compile(r'\bwww\.[a-z0-9-]+\.[a-z]{2,}\b', re.IGNORECASE),
-    # patreon.com/<slug> — calls out a recurring family explicitly even
+    # patreon.com/<slug> — calls out a recurring family by name even
     # though the generic rule above catches it, for log readability.
     re.compile(r'patreon\.com/[a-z0-9_]+', re.IGNORECASE),
     # tr.ee / linktr.ee / similar link-aggregator slugs
