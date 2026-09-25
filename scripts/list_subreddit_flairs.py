@@ -1,13 +1,12 @@
 """
-Sample link flairs from each subreddit we crosspost to, across all four
+Sample link flairs from each target subreddit across all four
 niches, by pulling the 100 most-recent posts from the public Reddit JSON
 listing endpoint (no auth required).
 
 Run locally — no Docker, no creds:
     python3 scripts/list_subreddit_flairs.py
 
-Output: markdown table to stdout. Copy/paste into docs/flairs_audit.md and
-update PostponeConfig.subreddit_flairs in config/automation_config.py if any
+Output: markdown table to stdout. Use it to update PostponeConfig.subreddit_flairs in config/automation_config.py if any
 flairs have changed.
 
 Why not PRAW? `reddit_accounts` table is empty so there are no creds to use,

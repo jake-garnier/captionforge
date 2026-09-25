@@ -4,7 +4,7 @@ Pipeline (hourly at :25 on the maintenance queue):
   1. Pull the Patreon active-member list, upsert into patreon_subscribers.
      Anyone present in our DB but missing from the API response is flipped
      to former_patron.
-  2. Playwright-scrape comments on the configured Patreon post (PATREON_{F}_POST_ID).
+  2. Playwright-scrape comments on the configured Patreon post (PATREON_{NICHE}_POST_ID).
      Parse the first valid Telegram @username out of each. Attach it to the
      matching patreon_subscribers row (joined by patreon_user_id from the
      comment's `commenter` relationship). Unparseable comments raise a

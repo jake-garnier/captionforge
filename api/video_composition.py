@@ -720,8 +720,8 @@ async def recompose_video(
             # Pull the previous BG's ml_tags so we can score candidates by
             # similarity. When the user hits "New BG" they're saying "this
             # caption-BG combo was right in spirit but the specific clip was
-            # off" — so the replacement should resemble it (same action,
-            # participants, position) rather than be a random pick.
+            # off" — so the replacement should resemble it (same activities,
+            # subjects, mood) rather than be a random pick.
             prev_bg_tags = None
             if video.background_video_id:
                 prev_bg = db.query(BackgroundVideo).filter_by(id=video.background_video_id).first()

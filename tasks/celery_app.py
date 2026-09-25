@@ -121,7 +121,6 @@ celery_app.conf.update(
         # ML tagging tasks (VLM-based action classification for background videos)
         # run_tagging_batch runs on dedicated dual-GPU worker via ml_tagging queue
         'tasks.ml_tagging.dispatch_ml_tagging_batch': {'queue': 'maintenance'},
-        'tasks.ml_tagging.retag_empty_actions': {'queue': 'maintenance'},
         'tasks.ml_tagging.run_tagging_batch': {'queue': 'ml_tagging'},
         # Stage 3 LLM judge: backlog scorer runs on gpu_llm where Mistral lives
         'tasks.caption_judge.judge_backlog_batch': {'queue': 'gpu_llm'},
@@ -257,8 +256,8 @@ celery_app.conf.update(
         # === Patreon→Telegram Membership Sync (DISABLED) ===
         # Was: hourly at :25, pulled Patreon active-member list, scraped the
         # designated post's comments for @username claims, re-evaluated
-        # pending join requests, and kicked lapsed patrons. Disabled
-        # 2026-05-07 — being handled manually for now.
+        # pending join requests, and removed lapsed patrons. Disabled by
+        # default; enable together with the telegram-join-listener service.
         # 'sync-patreon-telegram-motivation': {
         #     'task': 'tasks.patreon_telegram_sync.sync_patreon_telegram',
         #     'schedule': crontab(minute=25),

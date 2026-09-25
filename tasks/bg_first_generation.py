@@ -38,7 +38,7 @@ PROMPT_VERSION = "bg_first_v3"  # v3: per-BG dynamic word budget + hard max_toke
 # the BG's ml_tags so the model has actual scene grounding.
 NICHE_STYLE: dict[str, str] = {
     # Per-niche tone descriptions. Intentionally do NOT include literal
-    # phrase examples — empirically (audit 2026-05-08) the model copies
+    # phrase examples — empirically the model copies
     # any concrete strings here verbatim, leading to 15-25% of outputs
     # repeating prompt-supplied phrases. Describe the vibe and POV; let
     # the model invent the wording.
@@ -76,7 +76,7 @@ HARD_RULES = """Hard rules — break any one and your output is rejected:
 - Every sentence ends with proper punctuation (. ! ?). No mid-sentence periods.
 - Second person ("you"). Don't switch to first person.
 - PUNCTUATION: ONLY commas, periods, question marks, exclamation marks, and straight double quotes (") for dialogue. Banned: em-dash (—), en-dash (–), spaced hyphen ( - ), semicolon (;), apostrophe ('), curly quotes (' ' " "), ampersand (&), ellipsis character (…). The renderer cannot display em-dashes/semicolons/apostrophes correctly and they get stripped to commas/dropped, so writing them produces garbled output. Write 'dont', 'cant', 'youre', 'its', 'coachs' (no apostrophe). Write 'and' (not '&'). Use commas where you would use a semicolon.
-- NO "Caption:", "Read all text", "com/", "Join 30+", URLs, or promotional text.
+- NO "Caption:", "Read all text", "com/", "Join now", URLs, or promotional text.
 - Don't ask rhetorical questions to end. End on a concrete sensory image.
 - Don't repeat the same word/phrase 3+ times.
 - Don't list tags or use markdown.
@@ -88,12 +88,10 @@ trail, the pan, the road, the alarm clock). NOT abstractions. This is
 sharp and specific — not literary, not a greeting card. Phrases to
 AVOID (instant rejection if you stack 2+ of them):
 - "blurs into darkness", "whispers across", "cascading", "shimmering"
-- "trembling fingers", "feather-light", "golden hour bathes"
-- "your reflection watching", "unspoken invitation", "practiced grace"
-- "lazy stripe of sunlight", "soul awakens", "savor every"
-- "fingertips graze", "body betrays you"
+- "golden hour bathes", "lazy stripe of sunlight", "soul awakens"
+- "savor every", "symphony of", "dances across", "painted with light"
 - "the clock strikes/ticks past midnight"
-- "every nerve ending", "sink into bliss"
+- "a testament to", "in that moment, everything changed"
 You are not writing a novel. You are writing a Reddit caption that gets
 upvoted on a niche-specific captions sub.
 
@@ -110,10 +108,10 @@ not by those specifics. So:
 
 Opener diversity (very important):
 - Do not start two consecutive captions with the same construction.
-- Avoid "Jane Austen mode" openers — clock/time scene-setters, soft-focus
-  romance-novel intros, weather/lighting tableau.
+- Avoid "greeting card" openers — clock/time scene-setters, soft-focus
+  travelogue intros, weather/lighting tableau.
 - Open with a specific moment, situation, or sensory detail concrete to
-  THIS scene's tags. Use the BG's action, position, and participants as
+  THIS scene's tags. Use the clip's activities, setting, and subjects as
   the opener anchor.
 - Vary sentence structure: not every caption should be commands. Mix
   observation, command, internal monologue, dialogue.
@@ -607,7 +605,7 @@ def _generate_for_bg_impl(background_video_id: int, niche: str, n_candidates: in
         "produced": produced,
         "judge_pass": judged_pass,
         "judge_fail": judged_fail,
-        "winner_overall": best_overall if best_candidate_id else None,
+        "winner_overall": best_overall_for_log if best_candidate_id else None,
     }
 
 
@@ -677,7 +675,6 @@ def run_bg_first_cycle(self, niche: str, n_bgs: int = 30, candidates_per_bg: int
         # surfaced compositions with two competing text layers (burned-in
         # source captions + rendered overlays). Reject these at selection
         # time. Keeps text_on_screen=false AND missing/null — only drops 'true'.
-        # Pool reduction measured 2026-05-11: 34.5% (3279 of 9502 eligible).
         text_on_screen_value = BackgroundVideo.ml_tags["text_on_screen"].astext
         candidates_query = db.query(BackgroundVideo).filter(
             BackgroundVideo.filter_status == "approved",

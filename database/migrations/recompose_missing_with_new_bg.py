@@ -50,7 +50,7 @@ def run(video_ids):
 
             chunks = chunker.chunk(caption_text)
             required_duration = timing.get_total_duration(chunks) if chunks else 0
-            niche = cv.niche or "motivation"
+            niche = cv.niche or "motivation"  # fall back to the first shipped example niche
 
             candidates = db.query(BackgroundVideo).filter(
                 BackgroundVideo.filter_status == "approved",

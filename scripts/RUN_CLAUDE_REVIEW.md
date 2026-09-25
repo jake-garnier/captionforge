@@ -139,7 +139,7 @@ docker compose exec -T postgres psql -U captionsuser -d captions -c \
 
 ### 2. Allocate slots
 
-Greedy: 30 per slot per niche until a niche is drained or 10 slots are used. Example for cooking=33, travel=38, fitness=33, motivation=904 → cooking 2, travel 2, fitness 2, motivation 4 (274 videos).
+Greedy: 30 per slot per niche until a niche is drained or 10 slots are used. Example for cooking=33, travel=38, fitness=33, motivation=64 → cooking 2, travel 2, fitness 2, motivation 3 (168 videos).
 
 ### 3. Export one batch per slot, sequentially
 

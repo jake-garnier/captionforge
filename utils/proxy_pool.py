@@ -84,7 +84,7 @@ class ProxyPool:
             if not os.path.exists(proxy_file):
                 proxy_file = 'proxy_list.txt'
             if not os.path.exists(proxy_file):
-                proxy_file = 'list_proxyseller.txt'
+                proxy_file = 'proxies_full.txt'
 
             if os.path.exists(proxy_file):
                 with open(proxy_file, 'r') as f:

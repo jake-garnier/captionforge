@@ -168,12 +168,7 @@ async def video_gallery_page():
                 width: 100%;
                 height: 100%;
                 object-fit: contain;
-                filter: blur(20px);
                 transition: filter 0.3s ease;
-            }
-
-            video.playing {
-                filter: blur(0);
             }
 
             .video-info {

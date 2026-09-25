@@ -1,9 +1,9 @@
 """
 Migration: seed empty per-niche credential rows for fitness/travel/cooking
 
-Motivation already has rows in reddit_accounts, patreon_credentials, and telegram_bots.
-The other three niches had nothing — which means the multi-niche rollout
-had no place to attach creds when you wire them up via the UI.
+A niche needs a row in reddit_accounts, patreon_credentials, and telegram_bots
+before credentials can be attached to it via the UI. This seeds placeholder
+rows for every configured niche that is missing them.
 
 This migration inserts placeholder rows with is_enabled=False so the
 UI/forms have something to update. NOT NULL string columns get sentinel

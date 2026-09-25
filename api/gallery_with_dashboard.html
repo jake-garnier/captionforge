@@ -194,7 +194,6 @@
             width: 100%;
             height: 100%;
             object-fit: contain;
-            filter: blur(20px);
             transition: filter 0.3s ease;
             cursor: pointer;
         }
@@ -1604,8 +1603,8 @@
 
             <!-- Background Video Watermark Filter Section -->
             <div style="margin-top: 50px; padding-top: 30px; border-top: 2px solid #333;">
-                <h2 style="margin-bottom: 20px; color: #ff6b9d;">🎬 Background Video Filter</h2>
-                <p style="color: #aaa; margin-bottom: 30px;">Background clips are scraped from the Reddit subreddits configured in the Background Videos tab. Each clip is OCR-scanned for burned-in watermarks, creator handles and site URLs before it is added to the library.</p>
+                <h2 style="margin-bottom: 20px; color: #3ea6ff;">🎬 Background Video Filter</h2>
+                <p style="color: #aaa; margin-bottom: 30px;">Background clips are scraped from the Reddit subreddits configured in the Background Videos tab. Each clip is OCR-scanned for burned-in logos, overlays, and URLs before it is added to the library.</p>
 
                 <!-- Filter Stats -->
                 <div class="metric-card" style="margin-bottom: 30px;">
@@ -1619,7 +1618,7 @@
             <!-- Telegram Channel Scraper Section -->
             <div style="margin-top: 50px; padding-top: 30px; border-top: 2px solid #333;">
                 <h2 style="margin-bottom: 20px; color: #0088cc;">Telegram Channel Scraper</h2>
-                <p style="color: #aaa; margin-bottom: 30px;">Scrape videos from private Telegram channels for training data. Requires one-time authentication with your Telegram account.</p>
+                <p style="color: #aaa; margin-bottom: 30px;">Scrape videos from Telegram channels you belong to for training data. Requires one-time authentication with your Telegram account.</p>
 
                 <!-- Telegram Auth Status -->
                 <div class="metric-card" style="margin-bottom: 30px;">
@@ -1877,7 +1876,7 @@
                         <div class="training-card" style="background: #252525;">
                             <div class="training-card-title" style="font-size: 14px;">LLM Refinement (GPU 0 only)</div>
                             <p style="color: #aaa; font-size: 12px; margin-bottom: 10px;">
-                                Mistral-7B caption refinement. Uses ~3-4GB VRAM on GPU 0
+                                Mistral-Small-24B caption refinement via the host llama-server (GPU 0 profile)
                             </p>
                             <div id="llmStatus" style="margin-bottom: 15px;">
                                 <span class="training-badge training-badge-pending">Loading...</span>
@@ -2333,17 +2332,6 @@
             </div>
 
             <div class="filter-group">
-                <label>Min Views:</label>
-                <select id="bg-views-filter">
-                    <option value="0">Any</option>
-                    <option value="50000" selected>50K+</option>
-                    <option value="100000">100K+</option>
-                    <option value="500000">500K+</option>
-                    <option value="1000000">1M+</option>
-                </select>
-            </div>
-
-            <div class="filter-group">
                 <label>Source:</label>
                 <select id="bg-source-filter">
                     <option value="all" selected>All Sources</option>
@@ -2364,10 +2352,8 @@
             <div class="filter-group">
                 <label>Sort:</label>
                 <select id="bg-sort-filter">
-                    <option value="views" selected>Most Views</option>
-                    <option value="likes">Most Likes</option>
+                    <option value="created_at" selected>Newest</option>
                     <option value="duration">Duration</option>
-                    <option value="created_at">Newest</option>
                 </select>
             </div>
 
@@ -2509,7 +2495,7 @@
     <div id="composer-tab" class="tab-content">
         <!-- Stats Row -->
         <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px; max-width: 1400px; margin: 0 auto 25px;">
-            <div style="background: linear-gradient(135deg, #ff69b4 0%, #ff1493 100%); padding: 20px; border-radius: 8px;">
+            <div style="background: linear-gradient(135deg, #3ea6ff 0%, #1e6fd9 100%); padding: 20px; border-radius: 8px;">
                 <div style="font-size: 14px; opacity: 0.9;">Total Composed</div>
                 <div id="composerTotalVideos" style="font-size: 32px; font-weight: bold;">-</div>
             </div>
@@ -2529,7 +2515,7 @@
 
         <!-- Create Job Section -->
         <div style="max-width: 1400px; margin: 0 auto 25px; background: #1a1a1a; padding: 25px; border-radius: 8px; border: 1px solid #333;">
-            <h3 style="margin: 0 0 20px 0; font-size: 18px; color: #ff69b4;">Create Composition Job</h3>
+            <h3 style="margin: 0 0 20px 0; font-size: 18px; color: #3ea6ff;">Create Composition Job</h3>
             <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin-bottom: 20px;">
                 <div>
                     <label style="display: block; margin-bottom: 5px; font-size: 13px; color: #aaa;">Job Name</label>
@@ -2563,7 +2549,7 @@
                     <input type="number" id="composerTargetCount" value="10" min="1" max="100" style="width: 100%; background: #333; border: 1px solid #444; padding: 10px; border-radius: 4px; color: #fff;">
                 </div>
             </div>
-            <button onclick="createCompositionJob()" style="background: linear-gradient(135deg, #ff69b4, #ff1493); padding: 12px 30px; font-size: 15px;">
+            <button onclick="createCompositionJob()" style="background: linear-gradient(135deg, #3ea6ff, #1e6fd9); padding: 12px 30px; font-size: 15px;">
                 Create Composition Job
             </button>
         </div>
@@ -2818,7 +2804,7 @@ docker-compose exec celery-worker-scraper python -c "from publishers import Patr
         </div>
     </div>
 
-    <!-- Swipe Tab (Stage 5: Tinder-style review) -->
+    <!-- Swipe Tab (Stage 5: card-style review) -->
     <div id="swipe-tab" class="tab-content active">
         <div style="max-width: 700px; margin: 0 auto; padding: 20px 10px;">
             <div style="display: flex; gap: 12px; align-items: center; margin-bottom: 16px;">
@@ -2850,7 +2836,7 @@ docker-compose exec celery-worker-scraper python -c "from publishers import Patr
                 <div id="swipeVideoBox" style="position: relative; width: 100%; height: 60vh; max-height: 640px; background: #000; overflow: hidden; cursor: pointer;"
                      onclick="toggleSwipeVideo()">
                     <video id="swipeVideo" muted loop playsinline preload="metadata"
-                           style="position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; background: #000; filter: blur(24px); transition: filter 0.25s ease; cursor: pointer;"></video>
+                           style="position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; background: #000; cursor: pointer;"></video>
                     <!-- Play hint shown until first interaction -->
                     <div id="swipePlayHint"
                          style="position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; pointer-events: none; color: #fff; font-size: 56px; text-shadow: 0 2px 8px rgba(0,0,0,0.7);">▶</div>
@@ -2896,11 +2882,11 @@ docker-compose exec celery-worker-scraper python -c "from publishers import Patr
                     </button>
                     <button onclick="swipeAction('approve_reddit')"
                             style="padding: 16px; background: transparent; color: #28a745; font-size: 14px; border-radius: 0;"
-                            title="Bake on the per-niche CTA outro then schedule via Postpone for Reddit">
+                            title="Append the per-niche outro, then schedule via Postpone for Reddit">
                         ✓ Approve for Reddit (→)
                     </button>
                 </div>
-                <!-- Telegram/Patreon publish (separate destination, no CTA outro) -->
+                <!-- Telegram/Patreon publish (separate destination, no outro) -->
                 <div style="display: grid; grid-template-columns: 1fr; gap: 0; border-top: 1px solid #1f1f1f;">
                     <button onclick="swipeAction('approve_telegram')"
                             style="padding: 14px; background: transparent; color: #3ea6ff; font-size: 13px; border-radius: 0;"
@@ -3921,8 +3907,8 @@ docker-compose exec celery-worker-scraper python -c "from publishers import Patr
         <div style="max-width: 1400px; margin: 0 auto;">
             <h2 style="margin-bottom: 8px;">👥 Membership Sync</h2>
             <p style="color: #aaa; margin-bottom: 25px;">
-                Patrons comment their <code>@telegram_username</code> on the Patreon teaser post and request to join the channel.
-                Active patrons are auto-approved within ~30 seconds; lapsed patrons are kicked at the next hourly sync.
+                Members comment their <code>@telegram_username</code> on the pinned Patreon post and request to join the channel.
+                Active members are auto-approved within ~30 seconds; lapsed members are removed at the next hourly sync.
             </p>
 
             <!-- Pipeline status badges -->
@@ -4733,7 +4719,7 @@ docker-compose exec celery-worker-scraper python -c "from publishers import Patr
                 </div>`;
             }
 
-            // For images and GIFs - same blur effect as videos, click to reveal
+            // For images and GIFs - same click-to-play behaviour as videos
             // CSS handles positioning inside .video-container
             if (video.media_type === 'image' || video.media_type === 'gallery' || video.media_type === 'gif') {
                 return `<img src="/gallery/stream/${video.post_id}"
@@ -4741,7 +4727,7 @@ docker-compose exec celery-worker-scraper python -c "from publishers import Patr
                     onclick="this.classList.add('playing')"
                     onerror="this.style.display='none'; this.parentElement.innerHTML='<div style=\\'position:absolute;top:0;left:0;width:100%;height:100%;background:#222;display:flex;align-items:center;justify-content:center;color:#666;\\'>Image not available</div>'"
                     alt="${video.post_id}"
-                    title="Click to reveal">`;
+                    title="Click to view">`;
             }
 
             // Default: video player (mp4, webm, etc)
@@ -8275,7 +8261,6 @@ docker-compose exec celery-worker-scraper python -c "from publishers import Patr
         async function loadBgVideos() {
             const gallery = document.getElementById('bgVideoGallery');
             const tag = document.getElementById('bg-tag-filter').value;
-            const minViews = document.getElementById('bg-views-filter').value;
             const sourceType = document.getElementById('bg-source-filter').value;
             const filterStatus = document.getElementById('bg-filter-status').value;
             const sortBy = document.getElementById('bg-sort-filter').value;
@@ -8293,7 +8278,6 @@ docker-compose exec celery-worker-scraper python -c "from publishers import Patr
                     filter_status: filterStatus
                 });
                 if (tag) params.append('tag', tag);
-                if (minViews > 0) params.append('min_views', minViews);
                 if (sourceType && sourceType !== 'all') params.append('source_type', sourceType);
 
                 const response = await fetch(`/background-videos/?${params}`);
@@ -8342,9 +8326,9 @@ docker-compose exec celery-worker-scraper python -c "from publishers import Patr
                             </div>
                         </div>
                         <div class="video-info">
-                            <div class="video-title">${video.source_type === 'reddit' ? 'r/' + (video.reddit_subreddit || '?') : (video.username || 'unknown')}</div>
+                            <div class="video-title">r/${video.reddit_subreddit || '?'}</div>
                             <div class="video-meta">
-                                ${video.source_type === 'reddit' ? `<span>${formatNumber(video.reddit_score || 0)} upvotes</span>` : `<span>${formatNumber(video.views)} views</span><span>${formatNumber(video.likes)} likes</span>`}
+                                <span>${formatNumber(video.reddit_score || 0)} upvotes</span>
                                 <span>${formatDuration(video.duration_seconds || 0)}</span>
                                 <span>${video.width}x${video.height}</span>
                                 ${video.file_size_mb ? `<span>${video.file_size_mb.toFixed(1)} MB</span>` : ''}
@@ -8748,7 +8732,7 @@ docker-compose exec celery-worker-scraper python -c "from publishers import Patr
                         <td style="padding: 12px 8px;">
                             <div style="display: flex; align-items: center; gap: 8px;">
                                 <div style="flex: 1; height: 6px; background: #333; border-radius: 3px; overflow: hidden;">
-                                    <div style="height: 100%; width: ${job.progress_percent || 0}%; background: #ff69b4;"></div>
+                                    <div style="height: 100%; width: ${job.progress_percent || 0}%; background: #3ea6ff;"></div>
                                 </div>
                                 <span style="font-size: 12px; color: #aaa;">${Math.round(job.progress_percent || 0)}%</span>
                             </div>
@@ -9109,7 +9093,7 @@ docker-compose exec celery-worker-scraper python -c "from publishers import Patr
 
                     document.getElementById('previewChunks').innerHTML = data.chunks.map((chunk, i) => `
                         <div style="display: flex; gap: 15px; padding: 10px; background: #333; border-radius: 4px; align-items: center;">
-                            <span style="color: #ff69b4; font-weight: bold; min-width: 30px;">#${i + 1}</span>
+                            <span style="color: #3ea6ff; font-weight: bold; min-width: 30px;">#${i + 1}</span>
                             <span style="flex: 1; color: #fff;">${chunk.text}</span>
                             <span style="color: #aaa; font-size: 12px; min-width: 100px; text-align: right;">
                                 ${chunk.start}s - ${chunk.end}s (${chunk.duration}s)
@@ -10885,216 +10869,6 @@ docker-compose exec celery-worker-scraper python -c "from publishers import Patr
         }
 
         // ========================================
-        // Reddit Account Management Functions (Playwright-based)
-        // ========================================
-
-        let redditVncUrl = null;
-
-        async function loadRedditAccounts() {
-            const tbody = document.getElementById('redditAccountsTable');
-            try {
-                const response = await fetch('/reddit/accounts');
-                const accounts = await response.json();
-
-                // Also check session status
-                await checkRedditSessionStatus();
-
-                if (accounts.length === 0) {
-                    tbody.innerHTML = '<tr><td colspan="6" style="padding: 20px; text-align: center; color: #666;">No Reddit accounts configured. Add one above!</td></tr>';
-                    return;
-                }
-
-                tbody.innerHTML = accounts.map(account => `
-                    <tr style="border-bottom: 1px solid #222;">
-                        <td style="padding: 12px;">
-                            <span style="background: ${getNicheColor(account.niche)}; color: #fff; padding: 4px 10px; border-radius: 4px; font-size: 12px; font-weight: 500;">${account.niche}</span>
-                        </td>
-                        <td style="padding: 12px; font-family: monospace;">u/${account.username}</td>
-                        <td style="padding: 12px;">
-                            <div style="display: flex; flex-wrap: wrap; gap: 4px;">
-                                ${account.subreddits ? account.subreddits.split(',').map(s => `<span style="background: #333; padding: 2px 8px; border-radius: 3px; font-size: 11px;">r/${s.trim()}</span>`).join('') : '<span style="color: #666;">None</span>'}
-                            </div>
-                        </td>
-                        <td style="padding: 12px;">
-                            <span style="background: ${account.is_logged_in ? '#27ae60' : '#f39c12'}; color: #fff; padding: 2px 8px; border-radius: 3px; font-size: 11px;">
-                                ${account.is_logged_in ? '✓ Logged In' : '⚠ Not Logged In'}
-                            </span>
-                            ${account.last_login_at ? `<br><span style="font-size: 10px; color: #666;">Last: ${new Date(account.last_login_at).toLocaleDateString()}</span>` : ''}
-                        </td>
-                        <td style="padding: 12px;">
-                            <span style="background: ${account.is_enabled ? '#27ae60' : '#dc3545'}; color: #fff; padding: 2px 8px; border-radius: 3px; font-size: 11px;">
-                                ${account.is_enabled ? 'Enabled' : 'Disabled'}
-                            </span>
-                        </td>
-                        <td style="padding: 12px; text-align: right;">
-                            <div style="display: flex; gap: 8px; justify-content: flex-end; flex-wrap: wrap;">
-                                <button onclick="startRedditSession('${account.niche}')" class="btn" style="background: #ff4500; padding: 4px 10px; font-size: 11px;">🔑 Login</button>
-                                <button onclick="toggleRedditAccount('${account.niche}', ${!account.is_enabled})" class="btn" style="background: ${account.is_enabled ? '#f39c12' : '#27ae60'}; padding: 4px 10px; font-size: 11px;">
-                                    ${account.is_enabled ? '⏸ Disable' : '▶ Enable'}
-                                </button>
-                                <button onclick="deleteRedditAccount('${account.niche}')" class="btn" style="background: #dc3545; padding: 4px 10px; font-size: 11px;">🗑 Delete</button>
-                            </div>
-                        </td>
-                    </tr>
-                `).join('');
-            } catch (e) {
-                console.error('Error loading Reddit accounts:', e);
-                tbody.innerHTML = '<tr><td colspan="6" style="padding: 20px; text-align: center; color: #dc3545;">Error loading accounts</td></tr>';
-            }
-        }
-
-        async function checkRedditSessionStatus() {
-            try {
-                const response = await fetch('/reddit/session/status');
-                const data = await response.json();
-
-                const panel = document.getElementById('redditSessionPanel');
-                if (data.active) {
-                    panel.style.display = 'block';
-                    document.getElementById('redditSessionNiche').textContent = data.niche;
-                    redditVncUrl = data.novnc_url;
-                } else {
-                    panel.style.display = 'none';
-                    redditVncUrl = null;
-                }
-            } catch (e) {
-                console.error('Error checking Reddit session status:', e);
-            }
-        }
-
-        async function startRedditSession(niche) {
-            showTrainingToast(`Starting browser session for ${niche}...`, 'success');
-            try {
-                const response = await fetch(`/reddit/session/start?niche=${niche}`, { method: 'POST' });
-                const data = await response.json();
-
-                if (response.ok) {
-                    redditVncUrl = data.novnc_url;
-                    document.getElementById('redditSessionPanel').style.display = 'block';
-                    document.getElementById('redditSessionNiche').textContent = niche;
-                    showTrainingToast('Browser session started! Click "Open VNC" to login.', 'success');
-                } else {
-                    showTrainingToast(`Error: ${data.detail}`, 'error');
-                }
-            } catch (e) {
-                showTrainingToast(`Error: ${e.message}`, 'error');
-            }
-        }
-
-        function openRedditVNC() {
-            if (redditVncUrl) {
-                window.open(redditVncUrl, '_blank');
-            } else {
-                showTrainingToast('No active session. Start a session first.', 'error');
-            }
-        }
-
-        async function saveRedditCookies() {
-            showTrainingToast('Saving cookies...', 'success');
-            try {
-                const response = await fetch('/reddit/session/save-cookies', { method: 'POST' });
-                const data = await response.json();
-
-                if (response.ok) {
-                    showTrainingToast(`Cookies saved for ${data.niche}!`, 'success');
-                    loadRedditAccounts();
-                } else {
-                    showTrainingToast(`Error: ${data.detail}`, 'error');
-                }
-            } catch (e) {
-                showTrainingToast(`Error: ${e.message}`, 'error');
-            }
-        }
-
-        async function stopRedditSession() {
-            try {
-                const response = await fetch('/reddit/session/stop', { method: 'POST' });
-
-                if (response.ok) {
-                    document.getElementById('redditSessionPanel').style.display = 'none';
-                    redditVncUrl = null;
-                    showTrainingToast('Session stopped', 'success');
-                }
-            } catch (e) {
-                showTrainingToast(`Error: ${e.message}`, 'error');
-            }
-        }
-
-        async function saveRedditAccount() {
-            const niche = document.getElementById('redditAccountNiche').value;
-            const username = document.getElementById('redditAccountUsername').value.trim().replace('u/', '');
-            const subreddits = document.getElementById('redditAccountSubreddits').value.trim();
-
-            if (!username) {
-                showTrainingToast('Username is required', 'error');
-                return;
-            }
-
-            try {
-                const response = await fetch('/reddit/accounts', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        niche,
-                        username,
-                        subreddits: subreddits || null
-                    })
-                });
-
-                if (response.ok) {
-                    showTrainingToast(`Reddit account saved for ${niche}! Click "Login" to authenticate.`, 'success');
-                    // Clear form
-                    document.getElementById('redditAccountUsername').value = '';
-                    document.getElementById('redditAccountSubreddits').value = '';
-                    loadRedditAccounts();
-                } else {
-                    const data = await response.json();
-                    showTrainingToast(`Error: ${data.detail}`, 'error');
-                }
-            } catch (e) {
-                showTrainingToast(`Error: ${e.message}`, 'error');
-            }
-        }
-
-        async function toggleRedditAccount(niche, enable) {
-            try {
-                const response = await fetch(`/reddit/accounts/${niche}`, {
-                    method: 'PUT',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ is_enabled: enable })
-                });
-
-                if (response.ok) {
-                    showTrainingToast(`Account ${enable ? 'enabled' : 'disabled'}`, 'success');
-                    loadRedditAccounts();
-                } else {
-                    const data = await response.json();
-                    showTrainingToast(`Error: ${data.detail}`, 'error');
-                }
-            } catch (e) {
-                showTrainingToast(`Error: ${e.message}`, 'error');
-            }
-        }
-
-        async function deleteRedditAccount(niche) {
-            if (!confirm(`Delete Reddit account for ${niche}? This cannot be undone.`)) return;
-
-            try {
-                const response = await fetch(`/reddit/accounts/${niche}`, { method: 'DELETE' });
-
-                if (response.ok) {
-                    showTrainingToast('Account deleted', 'success');
-                    loadRedditAccounts();
-                } else {
-                    const data = await response.json();
-                    showTrainingToast(`Error: ${data.detail}`, 'error');
-                }
-            } catch (e) {
-                showTrainingToast(`Error: ${e.message}`, 'error');
-            }
-        }
-
-        // ========================================
         // Telegram Functions
         // ========================================
 
@@ -11437,7 +11211,7 @@ docker-compose exec celery-worker-scraper python -c "from publishers import Patr
         }
 
         // ========================================
-        // Swipe Tab (Stage 5: Tinder-style review)
+        // Swipe Tab (Stage 5: card-style review)
         // ========================================
 
         let swipeQueue = [];
@@ -11565,7 +11339,6 @@ docker-compose exec celery-worker-scraper python -c "from publishers import Patr
             const video = document.getElementById('swipeVideo');
             video.pause();
             video.src = `/composition/videos/${v.id}/stream?t=${Date.now()}`;
-            video.style.filter = 'blur(24px)';
             video.currentTime = 0;
             const hint = document.getElementById('swipePlayHint');
             if (hint) hint.style.display = 'flex';
@@ -11862,12 +11635,10 @@ docker-compose exec celery-worker-scraper python -c "from publishers import Patr
             const hint = document.getElementById('swipePlayHint');
             if (!v) return;
             if (v.paused) {
-                v.style.filter = 'blur(0)';
                 if (hint) hint.style.display = 'none';
                 v.play().catch(() => {});
             } else {
                 v.pause();
-                v.style.filter = 'blur(24px)';
                 if (hint) hint.style.display = 'flex';
             }
         }

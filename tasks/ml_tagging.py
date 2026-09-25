@@ -81,8 +81,7 @@ def get_redis_client() -> redis.Redis:
 
 # Bump this whenever the schema or prompt changes in a way that makes old
 # tags unusable. The dispatcher re-tags any BG whose stored version is
-# older. History: v1 = flat activity list, v2/v3 = earlier structured
-# schemas, v4 = the generic scene schema documented above.
+# older. Bump this whenever the schema documented above changes.
 ML_TAGS_VERSION = 4
 
 # 6 frames per video. InternVL3-14B emits ~768 vision tokens per frame so

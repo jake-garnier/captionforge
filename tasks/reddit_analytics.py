@@ -16,8 +16,8 @@ changes here. Skips niches with no Reddit account configured.
 
 Scraping goes through the existing RedditJsonScraper + proxy pool, keying
 proxy assignments as "user:<username>" so each account is sticky-ish.
-With our 8-proxy pool & 66 subreddit assignments, in practice all user
-keys share one fallback proxy — that's fine for v1 cadence.
+With a small proxy pool and many subreddit assignments, in practice all
+user keys share one fallback proxy — that's fine for v1 cadence.
 
 Cadence (set up in tasks/celery_app.py beat schedule):
   - dispatch-reddit-account-snapshots   every 15 min

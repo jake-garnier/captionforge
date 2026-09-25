@@ -713,7 +713,7 @@ def generate_caption_task(
 
         # Post-process to clean up artifacts and spam.
         # Look up the model's niche so the postprocessor's niche-aware
-        # rewrites (e.g. motivation anatomy substitutions) fire on test gens.
+        # rewrites (e.g. per-niche spelling normalisation) fire on test gens.
         # Cheap one-shot DB hit; this task is not in the hot path.
         niche = None
         try:
@@ -1343,7 +1343,7 @@ def run_generation_job(self, job_id: int):
                     if deductions:
                         logger.debug(f"Caption {i + 1} score {base_score} -> {quality_score}: {deductions}")
 
-                # Extract action/position tags for background video matching
+                # Extract activity tags for background video matching
                 caption_tags = extract_tags(caption_text)
 
                 # Generate title using llama-server
@@ -1459,7 +1459,7 @@ def extract_tags_llm_batch(self, limit: int = 50):
     Extract tags from generated captions using LLM (Mistral-7B).
 
     More accurate than regex-based extraction because it understands context
-    and can identify nuanced references to actions/positions.
+    and can identify nuanced references to activities and settings.
 
     Args:
         limit: Maximum number of captions to process
@@ -1574,7 +1574,7 @@ def score_captions_llm_batch(self, limit: int = 50):
 
     Evaluates captions on:
     - Grammar & Writing Quality (0-30 points)
-    - Sensuality & Appeal (0-40 points)
+    - Engagement & Appeal (0-40 points)
     - Story Clarity (0-30 points)
 
     Only processes captions with quality_score = None or 0.

@@ -100,7 +100,7 @@ def decline_join_request(niche: str, chat_id: str | int, user_id: int) -> bool:
 
 
 def kick_user(niche: str, chat_id: str | int, user_id: int) -> bool:
-    """Kick a user but allow rejoin later (per Q7 — re-pledges should work).
+    """Remove a user but allow rejoin later (re-pledges should work).
 
     Implementation: banChatMember then unbanChatMember(only_if_banned=true).
     """

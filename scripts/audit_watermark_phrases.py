@@ -51,12 +51,12 @@ NICHE_SUBREDDITS = {
 # Heuristics: a phrase is "suspicious" if it matches any of these.
 # Skewed toward false-positives — we triage by hand at the end.
 SUSPICIOUS_PATTERNS = [
-    re.compile(r"\b[A-Z][a-z]+\s+(captions?|stories?|clips?|edits?|studio|media|films?|productions?)\b", re.I),
-    re.compile(r"\bcaptions?\s+by\b", re.I),
+    re.compile(r"\b[A-Z][a-z]+\s+(clips?|edits?|studio|media|films?|productions?|creations?)\b", re.I),
+    re.compile(r"\b(?:edited|filmed|made)\s+by\b", re.I),
     re.compile(r"@\w{3,}"),
     re.compile(r"\.com|\.net|\.io|\.tv|patreon|ko-?fi|telegram|tiktok|youtube|instagram|reddit\b", re.I),
     re.compile(r"\b[A-Z][A-Z]+[a-z]+|[a-z]+[A-Z][A-Z]+\b"),  # CamelCase-ish
-    re.compile(r"\bsubscribe\b|\bfollow me\b|\bdm me\b", re.I),
+    re.compile(r"\bsubscribe\b|\bfollow (?:me|us)\b|\blink in bio\b", re.I),
 ]
 
 # Phrases we already filter — used to suppress already-known watermarks

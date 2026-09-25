@@ -99,4 +99,4 @@ docker compose exec redis redis-cli LLEN gpu
 
 ## Configuration
 
-Pydantic settings in [config/settings.py](config/settings.py), loaded from `.env` (`.env.example` lists the keys). Proxy files `proxy_list.txt` / `list_proxyseller.txt` are gitignored and live only on the deploy host. Automation thresholds and per-niche overrides (`generation_temperature`, `generation_repetition_penalty`, `postpone_reddit_username`, `subreddit_flairs`) are in [config/automation_config.py](config/automation_config.py).
+Pydantic settings in [config/settings.py](config/settings.py), loaded from `.env` (`.env.example` lists the keys). Proxy files `proxy_list.txt` / `proxies_full.txt` are gitignored and live only on the deploy host. Automation thresholds and per-niche overrides (`generation_temperature`, `generation_repetition_penalty`, `postpone_reddit_username`, `subreddit_flairs`) are in [config/automation_config.py](config/automation_config.py).

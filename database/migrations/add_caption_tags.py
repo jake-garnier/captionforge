@@ -1,7 +1,7 @@
 """
 Migration: Add tags field to generated_captions table
 
-Adds a JSON field to store extracted action/position tags from caption content.
+Adds a JSON field to store extracted activity tags from caption content.
 These tags enable matching captions to appropriate background videos during composition.
 
 Run with: docker-compose exec api python database/migrations/add_caption_tags.py
@@ -32,7 +32,7 @@ def migrate():
             logger.info("Column 'tags' already exists in generated_captions table")
             return
 
-        # Add the tags column (JSON array of action/position tags)
+        # Add the tags column (JSON array of activity tags)
         logger.info("Adding 'tags' column to generated_captions table...")
         conn.execute(text("""
             ALTER TABLE generated_captions

@@ -141,7 +141,7 @@ class CaptionCandidate(Base):
 
     Each row is one candidate caption generated SPECIFICALLY for a given
     background video. We pick the BG first, then generate K candidates
-    targeted at its scene_description / action / position / pov / participants,
+    targeted at its subjects / activities / setting / mood,
     judge each one inline with Stage 3, and the winner gets composed.
 
     This replaces the old "generate captions blind, then post-hoc match
@@ -516,7 +516,7 @@ class BackgroundVideo(Base):
 
     # ML tagging status (VLM-based content analysis)
     # pending: Awaiting ML tagging, processing: Being tagged, completed: Tags ready, error: Failed, skipped: Filter rejected
-    # ml_tags_version tracks the schema: v1 = {"actions": [...]}, v2 = structured scene metadata (see ml_tagging.py)
+    # ml_tags_version tracks the tag schema (subjects/activities/setting/mood/camera/text_on_screen, see ml_tagging.py)
     ml_tags = Column(JSON, nullable=True)
     ml_tags_version = Column(Integer, default=1, nullable=True)
     ml_tagging_status = Column(String(20), default="pending", index=True)
@@ -665,7 +665,7 @@ class ComposedVideo(Base):
     # in a Claude Code session and follows CLAUDE_REVIEW_INSTRUCTIONS.md.
     claude_review_status = Column(String(20), nullable=True, index=True)
     claude_review_scores = Column(JSON, nullable=True)   # {"caption_quality": 8, "caption_video_match": 7, "would_post": 8}
-    claude_review_issues = Column(JSON, nullable=True)   # ["caption mentions blonde hair, video shows brunette", ...]
+    claude_review_issues = Column(JSON, nullable=True)   # ["caption mentions a kitchen, video shows a trail", ...]
     claude_review_verdict = Column(String(20), nullable=True)  # pass | fail | maybe
     claude_review_notes = Column(Text, nullable=True)
     claude_review_model = Column(String(50), nullable=True)
@@ -717,7 +717,7 @@ class VideoPublishJob(Base):
     hosted_at = Column(TIMESTAMP(timezone=True), nullable=True)
 
     # Reddit profile post — populated per-niche at job creation from the
-    # active reddit_accounts row (was previously defaulted to a motivation account)
+    # active reddit_accounts row
     profile_subreddit = Column(String(100), nullable=True)
     profile_post_id = Column(String(50), nullable=True)
     profile_post_url = Column(Text, nullable=True)
@@ -804,6 +804,253 @@ class PatreonCredential(Base):
 
     def __repr__(self):
         return f"<PatreonCredential(niche={self.niche}, email={self.email}, configured={self.is_configured})>"
+
+
+class PatreonPublishJob(Base):
+    """
+    Publish job for posting composed videos to Patreon.
+
+    Workflow:
+    1. Upload video to Patreon
+    2. Create post with title and description
+    3. Set visibility (public/patrons-only)
+    """
+    __tablename__ = "patreon_publish_jobs"
+
+    id = Column(Integer, primary_key=True, index=True)
+    composed_video_id = Column(Integer, ForeignKey("composed_videos.id"), nullable=False)
+    credential_id = Column(Integer, ForeignKey("patreon_credentials.id"), nullable=True)
+
+    # Content info
+    niche = Column(String(50), nullable=False, index=True)
+    title = Column(String(500), nullable=False)
+    description = Column(Text, nullable=True)
+    tags = Column(Text, nullable=True)  # Comma-separated tags
+
+    # Status: scheduled, pending, uploading, posted, failed, cancelled
+    # - scheduled: queued for a future post time (waiting for beat dispatcher)
+    # - pending: dispatcher promoted it; Celery task will pick it up imminently
+    status = Column(String(30), default="scheduled", index=True)
+
+    # Scheduling info (one post per niche per day, similar to Postpone)
+    scheduled_date = Column(TIMESTAMP(timezone=True), nullable=True, index=True)
+    base_post_time = Column(TIMESTAMP(timezone=True), nullable=True)
+
+    # Patreon post info
+    patreon_post_id = Column(String(100), nullable=True)
+    patreon_post_url = Column(Text, nullable=True)
+    posted_at = Column(TIMESTAMP(timezone=True), nullable=True)
+
+    # Celery task tracking
+    celery_task_id = Column(String(100), nullable=True, index=True)
+
+    # Error handling
+    error_message = Column(Text, nullable=True)
+
+    # Timestamps
+    created_at = Column(TIMESTAMP(timezone=True), server_default=func.now())
+    started_at = Column(TIMESTAMP(timezone=True), nullable=True)
+    completed_at = Column(TIMESTAMP(timezone=True), nullable=True)
+
+    # Relationships
+    composed_video = relationship("ComposedVideo")
+    credential = relationship("PatreonCredential", back_populates="publish_jobs")
+
+    def __repr__(self):
+        return f"<PatreonPublishJob(id={self.id}, niche={self.niche}, status={self.status})>"
+
+
+class TelegramBot(Base):
+    """
+    Telegram bot credentials per niche.
+    Each niche has its own bot for posting to its channel.
+    """
+    __tablename__ = "telegram_bots"
+
+    id = Column(Integer, primary_key=True, index=True)
+    niche = Column(String(50), unique=True, nullable=False, index=True)
+    bot_username = Column(String(100), nullable=False)  # @bot_username
+    bot_token = Column(String(200), nullable=False)  # API token from BotFather
+    bot_name = Column(String(100), nullable=True)  # Display name
+
+    is_enabled = Column(Boolean, default=True)
+    created_at = Column(TIMESTAMP(timezone=True), server_default=func.now())
+    updated_at = Column(TIMESTAMP(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    # Relationships
+    channels = relationship("TelegramChannel", back_populates="bot")
+    publish_jobs = relationship("TelegramPublishJob", back_populates="bot")
+
+    def __repr__(self):
+        return f"<TelegramBot(id={self.id}, niche={self.niche}, username={self.bot_username})>"
+
+
+class TelegramChannel(Base):
+    """
+    Telegram channel configuration per niche.
+    Linked to a bot that posts to this channel.
+    """
+    __tablename__ = "telegram_channels"
+
+    id = Column(Integer, primary_key=True, index=True)
+    niche = Column(String(50), unique=True, nullable=False, index=True)
+    channel_id = Column(String(50), nullable=False)  # Numeric ID like -1001234567890
+    channel_username = Column(String(100), nullable=True)  # @ChannelUsername (if public)
+    channel_name = Column(String(200), nullable=True)  # Display name
+    discussion_group_id = Column(String(50), nullable=True)  # Linked discussion group for comments
+
+    bot_id = Column(Integer, ForeignKey("telegram_bots.id"), nullable=True)
+
+    is_enabled = Column(Boolean, default=True)
+    created_at = Column(TIMESTAMP(timezone=True), server_default=func.now())
+    updated_at = Column(TIMESTAMP(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    # Relationships
+    bot = relationship("TelegramBot", back_populates="channels")
+    publish_jobs = relationship("TelegramPublishJob", back_populates="channel")
+
+    def __repr__(self):
+        return f"<TelegramChannel(id={self.id}, niche={self.niche}, channel={self.channel_username or self.channel_id})>"
+
+
+class TelegramScrapeChannel(Base):
+    """
+    Telegram channels to scrape for training videos.
+    Uses Telethon (user account) to access private channels.
+    Separate from TelegramChannel which is for publishing.
+    """
+    __tablename__ = "telegram_scrape_channels"
+
+    id = Column(Integer, primary_key=True, index=True)
+    channel_id = Column(String(100), unique=True, nullable=False, index=True)  # e.g., "-1001234567890"
+    channel_username = Column(String(100), nullable=True)  # e.g., "@channelname" (if public)
+    channel_name = Column(String(200), nullable=True)  # Display name
+    is_enabled = Column(Boolean, default=True, index=True)
+    batch_size = Column(Integer, default=25)
+    created_at = Column(TIMESTAMP(timezone=True), server_default=func.now())
+    updated_at = Column(TIMESTAMP(timezone=True), server_default=func.now(), onupdate=func.now())
+    last_scrape_at = Column(TIMESTAMP(timezone=True), nullable=True)
+
+    def __repr__(self):
+        return f"<TelegramScrapeChannel(id={self.id}, channel={self.channel_username or self.channel_id}, enabled={self.is_enabled})>"
+
+
+class TelegramPublishJob(Base):
+    """
+    Publish job for posting composed videos to Telegram.
+    """
+    __tablename__ = "telegram_publish_jobs"
+
+    id = Column(Integer, primary_key=True, index=True)
+    composed_video_id = Column(Integer, ForeignKey("composed_videos.id"), nullable=False)
+    niche = Column(String(50), nullable=False, index=True)
+    channel_id = Column(Integer, ForeignKey("telegram_channels.id"), nullable=True)
+    bot_id = Column(Integer, ForeignKey("telegram_bots.id"), nullable=True)
+
+    # Status: scheduled, pending, uploading, completed, failed, cancelled
+    # - scheduled: queued for a future post time (waiting for beat dispatcher)
+    # - pending: dispatcher promoted it; Celery task will pick it up imminently
+    status = Column(String(30), default="scheduled", index=True)
+
+    # Scheduling info (one post per niche per day, similar to Postpone)
+    scheduled_date = Column(TIMESTAMP(timezone=True), nullable=True, index=True)
+    base_post_time = Column(TIMESTAMP(timezone=True), nullable=True)
+
+    # Telegram post info
+    telegram_message_id = Column(Integer, nullable=True)
+    telegram_post_url = Column(String(500), nullable=True)
+    caption_text = Column(Text, nullable=True)
+
+    # Celery task tracking
+    celery_task_id = Column(String(100), nullable=True, index=True)
+
+    # Error handling
+    error_message = Column(Text, nullable=True)
+
+    # Timestamps
+    created_at = Column(TIMESTAMP(timezone=True), server_default=func.now())
+    completed_at = Column(TIMESTAMP(timezone=True), nullable=True)
+
+    # Relationships
+    composed_video = relationship("ComposedVideo")
+    channel = relationship("TelegramChannel", back_populates="publish_jobs")
+    bot = relationship("TelegramBot", back_populates="publish_jobs")
+
+    def __repr__(self):
+        return f"<TelegramPublishJob(id={self.id}, niche={self.niche}, status={self.status})>"
+
+
+class RedditAccount(Base):
+    """
+    Reddit account credentials per niche.
+    Each niche can have its own Reddit account for posting.
+    Uses Playwright browser automation (no API keys needed).
+    """
+    __tablename__ = "reddit_accounts"
+
+    id = Column(Integer, primary_key=True, index=True)
+    niche = Column(String(50), unique=True, nullable=False, index=True)
+
+    # Account info
+    username = Column(String(100), nullable=False)
+
+    # Associated subreddits (comma-separated)
+    subreddits = Column(Text, nullable=True)  # e.g., "motivationcaptions,motivationcaptionpalace"
+
+    # Playwright session storage
+    cookies_path = Column(String(500), nullable=True)  # Path to saved cookies
+    is_logged_in = Column(Boolean, default=False)
+    last_login_at = Column(TIMESTAMP(timezone=True), nullable=True)
+
+    is_enabled = Column(Boolean, default=True)
+    created_at = Column(TIMESTAMP(timezone=True), server_default=func.now())
+    updated_at = Column(TIMESTAMP(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    def __repr__(self):
+        return f"<RedditAccount(id={self.id}, niche={self.niche}, username={self.username})>"
+
+    def get_subreddits_list(self) -> list:
+        """Return subreddits as a list."""
+        if not self.subreddits:
+            return []
+        return [s.strip() for s in self.subreddits.split(",") if s.strip()]
+
+
+class Workflow(Base):
+    """
+    Saved browser automation workflows.
+
+    Workflows are recorded sequences of browser actions (clicks, typing, navigation)
+    that can be replayed with variable substitution. Used for automating Reddit posting
+    and other browser-based tasks that require avoiding API restrictions.
+    """
+    __tablename__ = "workflows"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String(200), nullable=False, unique=True, index=True)
+    description = Column(Text, nullable=True)
+    target_site = Column(String(100), nullable=True, index=True)  # reddit, patreon, generic
+
+    # Recorded actions as JSON array
+    # Each action: {type, selector, coordinates, text, timestamp, ...}
+    actions = Column(JSON, nullable=False, default=list)
+
+    # Variables for parameterized execution
+    # Array of {name: "{{title}}", default_value: "", description: "Post title"}
+    variables = Column(JSON, default=list)
+
+    # Execution tracking
+    last_run_at = Column(TIMESTAMP(timezone=True), nullable=True)
+    run_count = Column(Integer, default=0)
+    last_run_status = Column(String(50), nullable=True)  # success, failed, cancelled
+    last_run_error = Column(Text, nullable=True)
+
+    # Timestamps
+    created_at = Column(TIMESTAMP(timezone=True), server_default=func.now())
+    updated_at = Column(TIMESTAMP(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    def __repr__(self):
+        return f"<Workflow(id={self.id}, name={self.name}, actions={len(self.actions or [])})>"
 
 
 class PostponeScheduleJob(Base):
@@ -956,7 +1203,7 @@ class SyncAlert(Base):
 
 
 # ============================================================================
-# Reddit analytics (added 2026-05-11)
+# Reddit analytics
 # Backs the /analytics tab. Data scraped from Reddit via the existing
 # RedditJsonScraper proxy pool. See tasks/reddit_analytics.py for the
 # scrape jobs and api/analytics.py for the read endpoints.

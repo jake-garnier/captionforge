@@ -116,7 +116,7 @@ SPAM_PATTERNS = [
     r'\bstoryblocks\b',
     r'\bstock\s*footage\b',
 
-    # === URL-style watermarks (multi-niche rollout 2026-05-08) ===
+    # === URL-style watermarks ===
     # Generic shapes that catch common watermark forms without needing
     # per-creator maintenance. New candidates surface via
     # scripts/audit_watermark_phrases.py.

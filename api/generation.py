@@ -485,7 +485,7 @@ async def backfill_caption_tags(
     """
     Backfill tags for existing captions that don't have them.
 
-    This extracts action/position tags from caption text and updates the database.
+    This extracts activity tags from caption text and updates the database.
 
     Args:
         limit: Maximum number of captions to process
@@ -632,7 +632,7 @@ async def score_captions_batch(
 
     This triggers an LLM-based quality evaluation that scores captions on:
     - Grammar & Writing Quality (0-30 points)
-    - Sensuality & Appeal (0-40 points)
+    - Engagement & Appeal (0-40 points)
     - Story Clarity (0-30 points)
 
     Args:

@@ -64,11 +64,8 @@ SPAM_PATTERNS = [
     r'\bupgrade to premium\b',
     r'\bmembership renews?\b',
     r'\bpatrons only\b',
-    r'\bdaily live shows?\b',
-    r'\bcustom requests?\b',
-    r'\bfull video and audio\b',
-    r'\bfull videos? (&|and) audio\b',
-    r'\bsource material\b',
+    r'\bfull video (?:&|and) audio\b',
+    r'\bfull-length video\b',
     r'\bget full access\b',
     r'\baccess to (?:all|over|\d+)',
     r'\bunlock\s+\d+\+?\s*(?:exclusive|captions?|videos?)',
@@ -102,9 +99,7 @@ SPAM_PATTERNS = [
     r'\blike\s*(?:&|and)\s*(?:share|subscribe|follow)\b',
     r'\bcomment\s+(?:below|what|if|your)\b',
     r'\blet\s+(?:me|us)\s+know\s+(?:in|what)\b',
-    r'\bpm\s+me\b',
-    r'\bdm\s+me\b',
-    r'\bsend\s+(?:a\s+)?(?:message|dm|chat)\b',
+    r'\bdm\s+(?:me|us)\s+for\b',
 
     # === Editor / stock-footage watermarks ===
     r'\bcaption\s*maker\b',
@@ -154,17 +149,15 @@ SPAM_PATTERNS = [
     r'\bcheck it out[\s.]*com\b',
     r'\bget longer,?\s*on\b',
     r'\bjoin for free\b',
-    r'\bget a taste\b',
-    r'\bupgrading to the full\b',
+    r'\bupgrade to (?:the )?full\b',
     r'\bget \d+\+?\s*captions?\b',
-    r'\bfull experience\b',
 
     # === Multi-choice quiz format (LoRA training-data leak) ===
     r'\bchoose[\s.]*your[\s.]*(?:path|fate|adventure)\b',
     r'\bedition\s*\(\s*\d+\s*options?\s*\)',
     r'^\s*[A-D]\s*\)\s',  # A) B) C) D) at line start
 
-    # === URL-style watermarks (multi-niche rollout 2026-05-08) ===
+    # === URL-style watermarks ===
     # Generic shapes that catch the watermark forms observed in fitness/
     # travel/cooking OCR without needing per-creator maintenance. See
     # docs/watermark_audit.md for the audit that motivated these.
@@ -182,7 +175,7 @@ SPAM_PATTERNS = [
     r'\br/[A-Za-z][\w_-]{2,}',
 
     # === Membership-tier promo blocks ===
-    r'(?:^|\s)\d+\+?\s*exclusive\s*captions?\s*(?:categories|stories)?',
+    r'(?:^|\s)\d+\+?\s*exclusive\s*(?:captions?|videos?|posts?)\b',
     r'\bsubscribe\s+for\s+full\s+(?:videos?|captions?|content)\b',
 ]
 
@@ -961,8 +954,8 @@ def score_caption_llm(text: str, model=None, tokenizer=None) -> Optional[float]:
 
     Evaluates the caption on:
     - Grammar, spelling, sentence structure (0-30 points)
-    - Engagement and appeal (0-40 points)
-    - Story clarity and flow (0-30 points)
+    - Engagement and appeal (0-35 points)
+    - Story clarity and flow (0-25 points)
 
     Args:
         text: Caption text to score
@@ -1096,24 +1089,19 @@ LITERARY_FLAG_PATTERNS = [
     r'\bcascad(e|ing|es)\b',                   # "light cascading"
     r'\bglistens?\b|\bglistening\b',           # "glistening" anything
     r'\bshimmer(s|ing|ed)?\b',                  # "shimmering" anything
-    r'\btrembling\s+(fingers|hands|lips|legs)\b',
+    r'\btrembling\s+(hands|voice)\b',
     r'\bdelicate\s+(fingers|dance|balance|patterns)\b',
-    r'\bfeather(ed|y|-light)\b',
-    r'\bunspoken\s+invitation\b',
     r'\bpracticed\s+(grace|ease|skill|pace)\b',
     r'\blazy\s+stripe\b|\blazy\s+afternoon\b',
-    r'\byour\s+reflection\s+(watching|catches|shows)\b',
+    r'\byour\s+reflection\s+(catches|shows)\b',
     r'\bdances?\s+(across|over)\b',            # "shadows dance across"
     r'\bunder\s+the\s+harsh\s+glare\b',
     r'\bsavor\s+every\b',
     r'\bpainted\s+(on|across|with)\b',
     r'\bin\s+practiced\b',
-    r'\bgoosebump(s)?\s+ris(e|ing)\b',
     r'\bunder\s+the\s+moonlight\b',
     r'\bclock\s+(strikes|ticks)\s+(midnight|past|loudly)\b',
-    r'\bfingertips?\s+graze\b',
-    r'\bsink\s+into\s+(bliss|the\s+moment)\b',
-    r'\bevery\s+nerve\s+ending\b',
+    r'\bsink\s+into\s+the\s+moment\b',
     r'\bsoul\s+awakens?\b',
     r'\bgolden\s+hour\s+bathes\b',
     r'\bsymphony\s+of\b',
@@ -1323,7 +1311,6 @@ def apply_rule_based_deductions(text: str, base_score: float) -> tuple:
         (r'\bwant the full story\b', "Teaser/paywall text"),
         (r'\bcom/\w{3,}', "URL fragment"),
         (r'\b\d{1,2}/\d{1,2}/\d{2,4}\b', "Date stamp"),
-        (r'\bperspective\s+[ab]\b', "Prompt perspective instruction leak"),
     ]
     for pattern, description in contamination_patterns:
         if re.search(pattern, text, re.IGNORECASE):

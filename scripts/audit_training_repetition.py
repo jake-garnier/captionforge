@@ -83,15 +83,15 @@ def main() -> int:
           AND length(llm_refined_text) >= :min_len
           AND lower(source_subreddit) = ANY(:subs)
     """)
-    all_subs = [s.lower() for fl in NICHE_SUBREDDITS.values() for s in fl]
+    all_subs = [s.lower() for subs in NICHE_SUBREDDITS.values() for s in subs]
     by_niche: dict[str, list[str]] = {}
-    sub_to_niche = {s.lower(): f for f, sl in NICHE_SUBREDDITS.items() for s in sl}
+    sub_to_niche = {s.lower(): n for n, subs in NICHE_SUBREDDITS.items() for s in subs}
     with engine.connect() as conn:
         for sub, cap in conn.execute(sql, {"min_up": MIN_UPVOTES, "min_len": MIN_LENGTH, "subs": all_subs}):
-            fet = sub_to_niche.get((sub or "").lower())
-            if not fet:
+            niche_key = sub_to_niche.get((sub or "").lower())
+            if not niche_key:
                 continue
-            by_niche.setdefault(fet, []).append(cap)
+            by_niche.setdefault(niche_key, []).append(cap)
 
     for niche, caps in sorted(by_niche.items(), key=lambda kv: -len(kv[1])):
         print(f"## {niche} — {len(caps)} training captions\n")

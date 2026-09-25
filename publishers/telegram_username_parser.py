@@ -1,6 +1,6 @@
 """Parse a Telegram @username out of a Patreon comment body.
 
-Per Q2/Q3:
+Matching rules:
   - Match must be exact case (Telegram usernames are case-insensitive in practice
     but we record the user's exact casing).
   - Telegram username rules: 5–32 chars, [a-zA-Z0-9_], must start with a letter.

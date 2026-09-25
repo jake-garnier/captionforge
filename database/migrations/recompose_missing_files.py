@@ -10,7 +10,7 @@ already-assigned background. Runs in-process so it doesn't depend on
 the celery GPU queue.
 
 Usage:
-  docker exec captions-api python database/migrations/recompose_missing_files.py 2837,2840,...
+  docker compose exec api python database/migrations/recompose_missing_files.py 2837,2840,...
 """
 import os
 import sys

@@ -3,10 +3,9 @@ Migration: collapse duplicate (niche, caption_text) rows in generated_captions
 that were produced by the orchestrator's mirror loop before the dedup fix
 in pipeline_orchestrator landed.
 
-Audit (2026-05-08):
-  117 duplicate rows across 7 unique (niche, text) clusters.
-  30 of those duplicates are referenced by composed_videos rows.
-  0 are referenced by publish_queue.
+Typical situation this handles:
+  a few hundred duplicate rows across a handful of (niche, text) clusters,
+  some of them referenced by composed_videos rows.
 
 Per-cluster strategy:
   - If any rows in the cluster are referenced by composed_videos.generated_caption_id,

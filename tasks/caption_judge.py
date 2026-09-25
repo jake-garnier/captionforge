@@ -26,7 +26,7 @@ from tasks.celery_app import celery_app
 logger = logging.getLogger(__name__)
 
 
-JUDGE_PROMPT_VERSION = "v5"  # v5: generic multi-niche rubric, "appeal" axis
+JUDGE_PROMPT_VERSION = "v5"  # bump whenever the rubric text below changes
 
 # We deliberately ask for compact JSON to keep parsing reliable. Scores are
 # integers 1-10 to make thresholding obvious.
@@ -62,12 +62,12 @@ Reject signals — IF ANY OF THESE APPEAR, set the corresponding axis to 1-3 and
 
 PROMOTIONAL / TRAINING-DATA LEAKS — these AUTOMATICALLY fail the caption (set ALL axes <= 3):
 - "Read all (the) text", "Output only the text", "preserving the reading order"
-- "Want the. Full. Story." or any "1250+ CAPTIONS" / "Daily Updates" / "Access to."
+- "Want the. Full. Story." or any "1000+ CAPTIONS" / "Daily Updates" / "Access to."
 - Promo codes ("SAVE25", "SPRING20", "20% off code:")
 - URLs, ".com/", "join for free", "get a taste", "upgrading to"
 - "BG source: r/..." (we leaked our prompt template)
 - Multi-choice quiz format ("Choose. Your. Path.", "A) ... B) ... C) ...")
-- Creator credits ("Captions. By. Studio Name", "Caption by ...")
+- Creator credits ("Edited. By. Studio Name", "Caption by ...")
 - Bot-style stutter periods (e.g. "Want. The. Full. Story.")
 - Anything that sounds like a Patreon / newsletter / channel tagline
 
@@ -92,13 +92,12 @@ appearing inside the caption. Auto-fail with all axes <= 3:
 
 FLORID / "GREETING CARD" REGISTER — these AUTOMATICALLY fail (set appeal=1, flow<=3, overall<=3):
 The caption is supposed to read like a sharp Reddit post, not a greeting card or a novel. If the writing has slipped into florid, "literary" prose, fail it. Specific tells:
-- "blurs into darkness", "whispers across", "cascading", "shimmering", "glistening"
-- "trembling fingers", "feather-light", "feathery touch"
-- "your reflection watching", "unspoken invitation", "practiced grace"
-- "lazy stripe of sunlight", "golden hour bathes", "savor every"
-- "fingertips graze", "soul awakens", "body betrays you"
-- "the clock strikes/ticks past midnight" (clock/time openers in general)
-- "every nerve ending", "sink into bliss"
+- "blurs into darkness", "whispers across", "cascading", "shimmering"
+- "golden hour bathes", "lazy stripe of sunlight", "soul awakens"
+- "savor every", "symphony of", "dances across", "painted with light"
+- "the clock strikes/ticks past midnight"
+- "a testament to", "in that moment, everything changed"
+- clock/time openers in general
 - Multi-clause sentences with semicolons or em-dashes mimicking literary style
 A good caption uses plain, direct words appropriate to its niche. If the caption tip-toes around with abstractions and Victorian prose, it has fallen out of register and is unusable.
 

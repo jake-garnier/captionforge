@@ -666,7 +666,7 @@ class RedditJsonScraper:
             return None
 
     # ------------------------------------------------------------------
-    # User analytics endpoints (added 2026-05-11)
+    # User analytics endpoints
     # Used by tasks/reddit_analytics.py to track per-account karma + post
     # stats. Go through the same proxy / block-detection path as the
     # subreddit scraping methods above.

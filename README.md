@@ -60,6 +60,7 @@ Highlights that are worth reading the code for:
 - **Per-niche orchestrator** (`tasks/pipeline_orchestrator.py`): a small state machine (`collecting → generation_pending → generating → composition_pending → composing`) with daily quotas, round-robin niche selection, an audit log of every transition, and idle-time dispatch of VLM tagging.
 - **Agentic visual review** (`scripts/claude_review_videos.py`): exports a brief plus three keyframes per composed video for an interactive Claude Code session to score, then writes verdicts back. The Swipe tab orders its queue by review verdict → judge score → heuristic quality.
 - **Zero-downtime deploys** (`.github/workflows/deploy.yml`): a self-hosted runner on the VM detects which services a push touched and rebuilds only those, skipping GPU workers while a generation or composition job is active.
+- **Numbered quality stages.** Code and docs refer to the quality gate as stages 1–5: VLM tagging, background-first generation, LLM judge, visual review, Swipe approval.
 - **Pluggable media host** (`publishers/media_host.py`): Reddit link posts need a public video URL; the default host is the API itself behind a Cloudflare tunnel, and the interface lets you drop in a third-party host.
 
 ---
@@ -113,7 +114,7 @@ Key tables (SQLAlchemy models in `database/models.py`; the schema is created aut
 - Docker Engine 24+ with the Compose plugin
 - An NVIDIA GPU with ≥ 8 GB VRAM and the [NVIDIA Container Toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/install-guide.html) (`nvidia-smi` must work inside a container). OCR and VLM tagging need a GPU; scraping, the UI, composition, and publishing run fine without one.
 - ~40 GB free disk for images, models, and videos
-- Optional: a second GPU. With one GPU, remove `celery-worker-gpu-2` from `docker-compose.yml` and set the Redis flag `ocr:gpu1:enabled=false` (see [Operating it](#operating-it)).
+- Optional: a second GPU. With one GPU, remove `celery-worker-gpu-2` from `docker-compose.yml`, change `celery-worker-ml-tagging` to `device_ids: ['0']`, and set the Redis flag `ocr:gpu1:enabled=false` (see [Operating it](#operating-it)).
 
 ### 1. Clone and configure
 
@@ -143,7 +144,7 @@ curl http://localhost:8000/health
 
 The API creates the schema on first start. Open the UI at **http://localhost:8000/gallery/**.
 
-If you only have one GPU, comment out the `celery-worker-gpu-2` service before `up`, or the container will fail to schedule.
+If you only have one GPU, comment out the `celery-worker-gpu-2` service and trim `celery-worker-ml-tagging` to `device_ids: ['0']` before `up`, or those containers will fail to schedule.
 
 ### 3. Add a subreddit and scrape
 

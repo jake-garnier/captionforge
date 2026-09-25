@@ -1959,8 +1959,8 @@ def start_bg_first_composition_job(niche: str) -> bool:
             # uses, so we catch captions that *would* overflow the BG before
             # we dispatch a doomed compose task. The previous heuristic
             # (word_count/2.5 + 3s buffer) underestimated by 1-2s when short
-            # chunks hit the per-chunk min_duration floor — see incident
-            # 2026-05-04: a 78-word caption fit the 34.2s heuristic but the
+            # chunks hit the per-chunk min_duration floor — for example,
+            # a 78-word caption fit the 34.2s heuristic but the
             # actual chunker output was 36.1s, overflowing the 35.8s BG and
             # looping the candidate forever.
             from video_generator.chunker import TextChunker

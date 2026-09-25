@@ -2,7 +2,7 @@
 Migration: Backfill Niche Fields from Model Names
 
 The niche tracking columns exist but were never populated for existing data.
-This migration infers the niche from model names like 'motivation-lora-20251210-0016'.
+This migration infers the niche from model names like 'motivation-lora-20260101-0001'.
 
 Tables updated:
 - trained_models

@@ -74,7 +74,7 @@ PROFILES = {
         #
         # Required llama.cpp upgrade: tag 7458 had mtmd_helper_eval
         # bugs that hit ~50% of multimodal calls. Built fresh from
-        # commit 2b2babd12 (2026-05-10), failure rate dropped to 0.
+        # a newer commit the failure rate dropped to 0.
         #
         # ctx=16384 + 0.45/0.55 split: shifting weights toward CUDA1
         # (2080 Ti, 11 GB) frees CUDA0 (4060 Ti, 8 GB) which carries the

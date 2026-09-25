@@ -108,18 +108,15 @@ class CaptionPostProcessor:
             r'\bGOUNT\b': 'COUNT', r'\bGount\b': 'Count', r'\bgount\b': 'count',
             r'\bGONSIDER\b': 'CONSIDER', r'\bGonsider\b': 'Consider', r'\bgonsider\b': 'consider',
             r'\bGOMPLETE\b': 'COMPLETE', r'\bGomplete\b': 'Complete', r'\bgomplete\b': 'complete',
-            r'\bGONDITIONED\b': 'CONDITIONED', r'\bGonditioned\b': 'Conditioned',
             r'\bGLICKED\b': 'CLICKED', r'\bGlicked\b': 'Clicked', r'\bglicked\b': 'clicked',
             r'\bGLOTHES\b': 'CLOTHES', r'\bGlothes\b': 'Clothes', r'\bglothes\b': 'clothes',
             r'\bGOULDN\'T\b': 'COULDN\'T', r'\bGouldn\'t\b': 'Couldn\'t', r'\bgouldn\'t\b': 'couldn\'t',
-            r'\bGRAVE\b': 'CRAVE', r'\bGrave\b': 'Crave', r'\bgrave\b': 'crave',  # Context-dependent
             r'\bGONFRONT\b': 'CONFRONT', r'\bGonfront\b': 'Confront', r'\bgonfront\b': 'confront',
             r'\bGOVERING\b': 'COVERING', r'\bGovering\b': 'Covering', r'\bgovering\b': 'covering',
             r'\bGAPTIONS?\b': 'CAPTIONS', r'\bGaptions?\b': 'Captions', r'\bgaptions?\b': 'captions',
             r'\bGRYING\b': 'CRYING', r'\bGrying\b': 'Crying', r'\bgrying\b': 'crying',
             r'\bGONNECTION\b': 'CONNECTION', r'\bGonnection\b': 'Connection',
             r'\bGHOICES?\b': 'CHOICES', r'\bGhoices?\b': 'Choices', r'\bghoices?\b': 'choices',
-            r'\bGOMPLIANCE\b': 'COMPLIANCE', r'\bGompliance\b': 'Compliance',
             r'\bGHRISTMAS\b': 'CHRISTMAS', r'\bGhristmas\b': 'Christmas', r'\bghristmas\b': 'christmas',
             r'\bGHALLENGE\b': 'CHALLENGE', r'\bGhallenge\b': 'Challenge', r'\bghallenge\b': 'challenge',
             r'\bGHEGK\b': 'CHECK', r'\bGheck\b': 'Check', r'\bgheck\b': 'check',
@@ -190,12 +187,12 @@ class CaptionPostProcessor:
             r'PATREON:?\s*',  # PATREON: at line start
             r'Patreon:?\s*Caption\s*\w+',  # Patreon: Caption 4f
             r'Hundreds\s+of\s+videos\s+on\s+Patreon\.?',
-            r'GET\s+LONGER,?\s*EXCLUSIVE\s+[CG]APTIONS\s+ON\s+PATREON.*?(?:\.|$)',
+            r'GET\s+MORE\s+EXCLUSIVE\s+[CG]ONTENT\s+ON\s+PATREON.*?(?:\.|$)',
             r'Join\s+my\s+Patreon\.?',
             r'Check\s+out\s+my\s+Patreon\.?',
             r'supporting\s+me\s+on\s+Patreon/\S+',
             r'Want\s+more\s+long\s+videos\s+like\s+this\s+one\.?\s*Join\s+my\s+Patreon\.?',
-            r'Full\s+video\s*\(\d+\)\s*available\s+here\.?.*?week\.?',
+            r'Full\s+video\s+available\s+(?:here|on)\b.*?(?:\.|$)',
             r'BLACK\s*FRIDAY\s*DEAL:.*?(?:DECEMBER|$)',  # Promotional
             r'[CG]HECK\s+OUT\s+MY\s+Pinned\s+POST\s+FOR\s+EXCLUSIVE\s+[CG]APTIONS',
 
@@ -214,8 +211,8 @@ class CaptionPostProcessor:
             # === Call-to-Action / Promotional Spam ===
             r'Unlock\s+\d+\+\s*[Ee]x[ec]lusive\s*captions?.*?(?:join|$)',
             r'Link\s+in\s+bio',
-            r'See\s+full\s+episodes\s+&\s+\d+\+\s+exclusive\s+caption\s+categories\s+only\s+on',
-            r'Enjoyed\s+this\s+caption\.?\s*Join\s+\d+\+\s+fans.*?Patreon/\S+',
+            r'See\s+full\s+episodes\s+(?:&|and)\s+exclusive\s+content\s+only\s+on',
+            r'Enjoyed\s+this\s+caption\.?\s*Join\s+\d+\+\s+(?:members|supporters).*?Patreon/\S+',
             r'Liked\s+This\s+Caption\.?\s*Unlock.*?(?:bio|join)',
             r'[Ee]njoyed?\s+this\s+caption',
             r'[Ll]iked?\s+this\s+caption',
@@ -231,8 +228,7 @@ class CaptionPostProcessor:
             r'[Ff]ree\s+trial',
             r'[Ss]ign\s+up',
             r'[Cc]lick\s+(?:here|the\s+link|below)',
-            r'[Dd]m\s+me\b',
-            r'[Ss]end\s+(?:a\s+)?(?:message|dm|chat)\b',
+            r'[Dd]m\s+(?:me|us)\s+for\b',
             r'[Bb]uy\s+me\s+a\s+coffee',
 
             # === Mangled/Partial URLs from OCR ===
@@ -789,7 +785,7 @@ DO NOT:
 - Remove unique content even if it seems short or incomplete
 - Summarize or combine different slides
 - Add new content
-- Rewrite the tone or soften the wording
+- Rewrite the tone or change the wording
 
 EXAMPLE:
 Input: "Alarm at 5 *|* Nobody is goming to do it for you *|* One more mile *|* Then breakfast"

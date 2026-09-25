@@ -57,7 +57,7 @@ services:
       ENVIRONMENT: ${ENVIRONMENT:-production}
       DEBUG: ${DEBUG:-false}
 
-      # Playwright (no API needed!)
+      # Playwright (browser automation; no Reddit API credentials required)
       PLAYWRIGHT_HEADLESS: ${PLAYWRIGHT_HEADLESS:-true}
       PLAYWRIGHT_TIMEOUT: ${PLAYWRIGHT_TIMEOUT:-30000}
 
@@ -171,7 +171,7 @@ services:
       NCCL_IB_DISABLE: "1"
       # DISABLE inline LLM during OCR - all LLM refinement via batch task
       LLM_POSTPROCESS_ENABLED: "false"
-      # Playwright (no API needed!)
+      # Playwright (browser automation; no Reddit API credentials required)
       PLAYWRIGHT_HEADLESS: ${PLAYWRIGHT_HEADLESS:-true}
       PLAYWRIGHT_TIMEOUT: ${PLAYWRIGHT_TIMEOUT:-30000}
       POSTGRES_HOST: postgres
@@ -351,7 +351,7 @@ services:
     extra_hosts:
       - "host.docker.internal:host-gateway"  # Allow access to llama-server on host
     environment:
-      # Playwright (no API needed!)
+      # Playwright (browser automation; no Reddit API credentials required)
       PLAYWRIGHT_HEADLESS: ${PLAYWRIGHT_HEADLESS:-true}
       PLAYWRIGHT_TIMEOUT: ${PLAYWRIGHT_TIMEOUT:-30000}
       POSTGRES_HOST: postgres
@@ -488,10 +488,10 @@ services:
       - captions-network
     restart: unless-stopped
 
-  # Telegram Join Listener — DISABLED 2026-05-07
-  # Was: long-poll chat_join_request for the membership-sync flow (single
-  # instance per bot since Telegram getUpdates is single-consumer). Disabled
-  # because membership add/remove is being handled manually for now.
+  # Telegram Join Listener (optional, disabled by default)
+  # Long-polls chat_join_request for the Patreon -> Telegram membership-sync
+  # flow (single instance per bot since Telegram getUpdates is single-consumer).
+  # Leave it off unless you run the membership sync.
   # To re-enable: uncomment the service block and run `docker-compose up -d
   # telegram-join-listener`. Code in services/telegram_join_listener.py is
   # kept intact so re-enabling is a one-step change.

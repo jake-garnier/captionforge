@@ -35,7 +35,7 @@ Decide these before touching anything:
 - [ ] **Caption-source subreddits** — subs whose posts are videos *with text burned in*. That text is what the OCR corpus is built from. (`GetMotivated`, `Motivation`, `quotes`, `DecidingToBeBetter`.)
 - [ ] **Background-clip subreddits** — subs with short, clean, *un-captioned* footage that suits the niche. (`naturegifs`, `oddlysatisfying`, `aviation`, `hiking`.)
 - [ ] **Target subreddits for posting** and whether any of them require a flair.
-- [ ] **A Reddit account** with enough age/karma to post in those subs. Fresh accounts get filtered quickly; plan to warm the account up manually first.
+- [ ] **A Reddit account** with enough age/karma to post in those subs. Many subreddits set minimum account age and karma, so a brand-new account should build a normal posting history first.
 
 ---
 
@@ -168,7 +168,7 @@ None of this is automatable; it is clicking through web UIs.
 
 ### 3.1 Reddit account + Postpone
 
-1. Create the Reddit account, give it a neutral bio, and post/comment from it by hand for a few days.
+1. Create the Reddit account, fill in the profile, and use it normally for a while so it meets the target subreddits' age/karma requirements.
 2. In Postpone: *Settings → Social Accounts → Connect Reddit*, log in as that account, finish OAuth.
 3. Read back the exact username Postpone stores:
 
@@ -317,7 +317,7 @@ The orchestrator picks the trigger up on its next 5-minute tick and walks `gener
 | Subreddits only in config, not in the scraper tables | `total_captions` stays 0 | `POST /subreddits/` and `POST /background-videos/reddit/subreddits/` |
 | `postpone_reddit_username` case wrong | Postpone schedule fails with "Reddit account is not connected" | Re-run the `socialAccounts` query and copy the exact string |
 | `.env` edited but not re-read | New Patreon vars missing | `docker compose up -d --force-recreate --no-deps api` |
-| Fresh Reddit account | Posts publish but never appear in the sub | Warm the account up manually; check in a private window |
+| New Reddit account | Posts are removed by a subreddit's karma/age filter | Check the subreddit's posting requirements; build karma first |
 | Corpus too small | Training aborts with "Not enough training data" | Wait; ≥ 100 to start, 500+ for a usable adapter |
 | Background subs untagged | Rules never fire, random-looking clips | Tagging runs on idle orchestrator ticks; check `ml_tagging:enabled` in Redis |
 
@@ -329,7 +329,7 @@ The orchestrator picks the trigger up on its next 5-minute tick and walks `gener
 - [ ] `config/niche_rules.py`: `NICHE_SUBREDDITS` + `NICHE_TAG_RULES`
 - [ ] `git push` and confirm the niche in `/pipeline/status`
 - [ ] `POST /subreddits/` for each caption source; `POST /background-videos/reddit/subreddits/` for each background sub
-- [ ] Reddit account created and warmed up; connected in Postpone; `postpone_reddit_username` matches
+- [ ] Reddit account created and meets target-sub requirements; connected in Postpone; `postpone_reddit_username` matches
 - [ ] Telegram: bot + channel; `POST /telegram/bots`, `.../discover-channels`, `POST /telegram/channels`, `.../test`
 - [ ] (Optional) `POST /reddit/accounts` + session login; `POST /patreon/credentials` + session login; Patreon env vars + force-recreate
 - [ ] Corpus ≥ 100 (ideally 500+): `GET /training/data/count/{niche}`

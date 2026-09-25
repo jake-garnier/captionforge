@@ -153,9 +153,10 @@ jobs:
           echo "Docker changed: $DOCKER_CHANGED"
           echo "Any code changed: $ANY_CODE_CHANGED"
 
-  # Deploy job - always runs, uses smart service detection
+  # Deploy job - skipped for docs-only pushes, otherwise uses smart service detection
   deploy:
     needs: detect-changes
+    if: needs.detect-changes.outputs.docs-only != 'true'
     runs-on: self-hosted
     steps:
       - name: Clean up old files
@@ -183,7 +184,7 @@ jobs:
           ENVIRONMENT=production
           DEBUG=false
 
-          # Playwright (NO API CREDENTIALS NEEDED!)
+          # Playwright (browser automation; no Reddit API credentials required)
           PLAYWRIGHT_HEADLESS=true
           PLAYWRIGHT_TIMEOUT=30000
 

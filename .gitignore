@@ -3,7 +3,7 @@
 
 # Proxy credentials (contains passwords)
 proxy_list.txt
-list_proxyseller.txt
+proxies_full.txt
 *.proxies
 
 # Python
@@ -79,11 +79,8 @@ celerybeat.pid
 .dockerignore
 
 # Auth credentials / browser sessions
-client_secret_*.json
 patreon_cookies/
 
-# Stage 4 review pipeline (per-run state, not source)
-scripts/review_batches/
-scripts/review_results/
+# Visual review batches (per-run state, not source)
 scripts/claude_review_batches/
 scripts/claude_review_results/
